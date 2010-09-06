@@ -32,6 +32,29 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net
  更新信息(changelog):
+	2010-09-04
+		1.尝试添加新的PCI信息显示格式（类似CHKPCI).
+		文件内容格式:
+			第一行固定PCI$
+			可选固定输出内容。
+			...
+			$PCI设备信息
+			匹配后要显示的内容
+			...
+			$pci设备信息2
+			匹配后要显示的内容
+			...
+		一个例子:
+			===========CHKPCI.PCI=============
+			PCI$
+			$PCI\VEN_8086&DEV_7113
+			Intel
+			test
+			$PCI\VEN_8086&DEV_7000&CC_020000&REV_00
+			fat copy /IASTOR.SYS (fd0)/
+			fat copy /iastor.inf (fd0)/
+			fat copy /txtsetup.oem (fd0)/
+			===========CHKPCI.PCI=============
 	2010-08-28
 		1.添加帮助信息 -h 参数.
 		2.添加参数 -cc:CC,用于显示指定设备.
@@ -63,7 +86,6 @@ struct pci_dev {
 	unsigned char revID;
 	unsigned char prog;
 	unsigned short class;
-	unsigned char class3;
 
 	unsigned long subsys;
 } __attribute__ ((packed));
@@ -73,17 +95,10 @@ struct vdata
 	unsigned long addr;
 	unsigned long dev;
 } __attribute__ ((packed));
-#define DEBUG
-#define VDATA	 ((struct vdata *)0x600000)
-#define FILE_BUF ((char *)0x600000+0x80000)
-
-/* BIOS32 signature: "_32_" BIOS 32标志 '_32_'在内存E0000-FFFFF中 */
-#define BIOS32_SIGNATURE	(('_' << 0) + ('3' << 8) + ('2' << 16) + ('_' << 24))
-
-/* PCI service signature: "$PCI" */
-#define PCI_SERVICE		(('$' << 0) + ('P' << 8) + ('C' << 16) + ('I' << 24))
-
-//static unsigned long bios32_entry = 0;
+//#define DEBUG
+#define VDATA	 ((struct vdata *)(0x600000+0x4000))
+#define FILE_BUF ((char *)0x684000)
+#define PCI ((struct pci_dev *)0x600000)
 
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
@@ -102,9 +117,7 @@ asm(".long 0xBCBAA7BA");
  
 int chkpci_func (char *,int);
 
-int
-
-main ()
+int main (void)
 {
 	void *p = &main;
 	char *arg = p - (*(int *)(p - 8));
@@ -131,38 +144,6 @@ void outl(int port, int val)
 /*检测是否存在PCI BIOS*/
 unsigned long pcibios_init(int flags)
 {
-#if 0
-	union bios32 *check;
-	unsigned char sum;
-	int i, length;
-	
-	for (check = (union bios32 *)0xE0000; check < (union bios32 *)0xFFFF0; ++check)
-	{
-		if (check->fields.signature != BIOS32_SIGNATURE) /*比较"_32_"标志,如果不是继续查找*/
-			continue;
-		if (! (length = check->fields.length * 16))
-			continue;
-		/*检测校检和是否正确,所有字节总和必须是0*/
-		sum = 0;
-		for (i = 0; i < length ; i++)
-			sum += check->chars[i];
-		if (sum)
-			continue;
-
-		if (check->fields.revision != 0)
-		{/*版本号必须是0,*/
-			continue;
-		}
-		/*已经找到*/
-		printf ("pcibios_init : BIOS32 Service Directory structure at 0x%X\n", check);
-		bios32_entry = check->fields.entry;
-		printf ("pcibios_init : BIOS32 Service Directory entry at 0x%X\n", bios32_entry);
-		break;
-	}
-	
-	if ( bios32_entry && (check->fields.entry < 0x100000))
-		return 1;
-#endif
 	unsigned long tmp;
 	outb(0xCFB,1);
 	tmp = inl(0xCF8);
@@ -249,14 +230,13 @@ int read_cfg(long len)
 	unsigned char *P=FILE_BUF;
 	char *P1;
 	unsigned long t;
-	memset((char *)VDATA,0,0x80000);
+	memset((char *)VDATA,0,0x70000);
 	while( P = find_line(P, 'V', 0))
 	{
 		P += 2;
 		t = asctohex(P);
 		P = skip_to (0, P);
 		VDATA[t].addr = (unsigned int)P;
-
 		while (*P != 0x0D && *++P);
 		
 		if (*P == 0x0D)
@@ -307,6 +287,80 @@ int show_dev(struct pci_dev *pci)
 	printf("Unknown\n");
 	return 0;
 }
+#define VEN 0x5F4E4556
+#define DEV 0X5F564544
+#define SUB 0x53425553
+int chkpci(struct pci_dev *end)
+{
+	struct pci_dev *pci;
+	char *p1,*P = find_line (FILE_BUF, 0 , 0);//跳过第一行。!
+	unsigned long t;
+	struct pci_dev dev;
+	if (*P != '$')/*输出文件头部份*/
+	{
+		while (*P && P[1] != '$') putchar(*P++);
+		putchar('\n');
+	}
+	while (P = find_line (P, '$' , 0))
+	{
+		if (*(unsigned long *)(P+1) & 0XFFDFDFDF != 0x5C494350) //PCI\
+			continue;
+		if (*(unsigned long *)(P+5) & 0xFFDFDFDF != VEN)//check VEN_
+			continue;
+		if (*(unsigned long *)(P+14) & 0xFFDFDFDF != DEV)// check DEV_
+			continue;
+		memset (&dev,0,sizeof(struct pci_dev));
+		P = P + 9;
+		t = asctohex(P);
+		dev.venID = t;
+		P += 9;
+		t = asctohex(P);
+		dev.devID = t;
+		P += 5;
+
+		if (*(unsigned long *)P == SUB)//check SUBSYS
+		{
+			P += 7;
+			t = asctohex(P);
+			P += 9;
+			dev.subsys = t;
+		}
+		
+		if (*(unsigned short *)P == 0x4343) //CC_
+		{
+			P += 3;
+			t = asctohex(P);
+			t = t < 0xffff?t:t>>8;
+			dev.class = (unsigned short)t;
+			P += 4;
+			while (*P != 0xD && *P++ != '&');
+		}
+		
+		if (*(unsigned short *)P == 0x5F564552) //REV_
+		{
+			P += 4;
+			t = asctohex(P);
+			dev.revID = (char)t;
+		}
+
+		for (pci=PCI;pci < end; pci++)
+		{
+			if (pci->venID == dev.venID && pci->devID == dev.devID)
+			{
+				if (dev.subsys && dev.subsys != pci->subsys) continue;
+				if (dev.class && dev.class != pci->class) continue;
+				if (dev.revID && dev.revID != pci->revID) continue;
+				pci->venID = 0;
+				for (P = find_line(P, 0, 0);*P == '$';P = find_line(P, 0, 0));
+				//0x240a \n$ 也就是以$开头的行。
+				while (*P && *(unsigned short *)P != 0x240a) putchar(*P++);//输出内容直到文件尾或下一个以$开始的行。
+				putchar('\n');
+				break;
+			}
+		}
+	}
+	return 1;
+}
 
 int chkpci_func(char *arg,int flags)
 {
@@ -315,7 +369,8 @@ int chkpci_func(char *arg,int flags)
 	unsigned long bus,dev,func;
 #endif
 	unsigned long long cd = 0;
-	struct pci_dev devs;
+	struct pci_dev *devs = PCI;
+	*(unsigned long *)FILE_BUF = 0;
 	if (! pcibios_init(0)) return 0;
 	if (*arg)
 	{
@@ -339,9 +394,13 @@ int chkpci_func(char *arg,int flags)
 			if (! read ((unsigned long long)(int)FILE_BUF,0x100000,GRUB_READ))
 				return 0;
 			FILE_BUF[filemax] = 0;
-			read_cfg(filemax);
+			if (*(unsigned long *)FILE_BUF != 0X24494350) 
+			{
+				read_cfg(filemax);
+			}
 		}
 	}
+
 /* 循环查找所有设备.
 	for (bus=0;bus<5;bus++)
 	  for (dev=0;dev<32;dev++)
@@ -368,13 +427,13 @@ int chkpci_func(char *arg,int flags)
 			continue;
 		}
 
-		*(unsigned long *)&devs.venID = ret;/*ret返回值低16位是PCI_VENDOR_ID,高16位是PCI_DEVICE_ID*/
+		*(unsigned long *)&devs->venID = ret;/*ret返回值低16位是PCI_VENDOR_ID,高16位是PCI_DEVICE_ID*/
 		
 		/*获取PCI_CLASS_REVISION,高24位是CLASS信息(CC_XXXXXX),低8位是版本信息(REG_XX)*/
 		outl(0xCF8,regVal | 8);
-		*(unsigned long *)&devs.revID = inl(0xCFC); /* High 24 bits are class, low 8 revision */
+		*(unsigned long *)&devs->revID = inl(0xCFC); /* High 24 bits are class, low 8 revision */
 
-		if ((char)cd == 0 || (char)(devs.class >> 8) == (char)cd) //如果指定了CD参数,CD值不符合时不显示.
+		if ((char)cd == 0 || (char)(devs->class >> 8) == (char)cd) //如果指定了CD参数,CD值不符合时不显示.
 		{
 			/*获取PCI_HEADER_TYPE类形,目前只用于后面检测是否单功能设备*/
 			outl(0xCF8,regVal | 0xC);
@@ -382,14 +441,20 @@ int chkpci_func(char *arg,int flags)
 			ret >>= 16;
 			{//读取SUBSYS信息,低16位是PCI_SUBSYSTEM_ID,高16位是PCI_SUBSYSTEM_VENDOR_ID(也叫OEM信息)
 				outl(0xcf8,regVal | 0x2c);
-				devs.subsys = inl(0xcfc);
+				devs->subsys = inl(0xcfc);
 			}
-			printf("PCI\\VEN_%04X&DEV_%04X&SUBSYS_%08X&CC_%04X%02X&REV_%02X\n",
-					devs.venID,devs.devID,devs.subsys,devs.class,devs.prog,devs.revID);
-			if (*arg) show_dev(&devs);
+			if (*(unsigned long *)FILE_BUF != 0X24494350)
+			{
+				printf("PCI\\VEN_%04X&DEV_%04X&SUBSYS_%08X&CC_%04X%02X&REV_%02X\n",
+						devs->venID,devs->devID,devs->subsys,devs->class,devs->prog,devs->revID);
+				if (*arg) show_dev(devs);
+			}
+			devs++;
 		}
+		devs->venID = 0;
 		/*如果是单功能设备,检测下一设备*/
 		if ( (regVal & 0x700) == 0 && (ret & 0x80) == 0) regVal += 0x700;
 	}
+	if (*(unsigned long *)FILE_BUF == 0X24494350) return chkpci(devs);
 	return 1;
 }

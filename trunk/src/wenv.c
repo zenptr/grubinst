@@ -32,6 +32,9 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-09-06
+	1.修正一个逻辑错误（在释放变量的时候）。
+	http://bbs.wuyou.com/viewthread.php?tid=159851&page=25#pid2033990
  2010-08-08 1.read 函数读取的文件允许使用":"符号注释.使用":"开头,这一行将不会执行.
 			2.解决当使用read可能导致出错的问题.
  */
@@ -367,12 +370,12 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 {
 	int i,j;
 	char ch[MAX_VAR_LEN]="\0";
-	strcpy(ch,var);
-	if (strlen(var) == 0 && flags != 2) return !printf("Err2");
-	for(i=0;i <= VAR_MAX && VAR[i][0];i++)
+
+	if (flags == 2)//显示所有变量信息
 	{
-		if (flags == 2)
+		for(i=0;i <= VAR_MAX && VAR[i][0];i++)
 		{
+			if (VAR[i][0] < 'A') continue;
 			for (j=0;j<8 && VAR[i][j];j++)
 				putchar(VAR[i][j]);
 			putchar('=');
@@ -381,7 +384,15 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 			if (ENVI[i][j]) printf("...");
 			putchar('\n');
 		}
-		else if (memcmp(VAR[i],ch,8) == 0)
+		return 1;
+	}
+
+	if (strlen(var) == 0) return !printf("Err2");//如果var为空。
+	strcpy(ch,var);
+	j = 0;
+	for(i=0;i <= VAR_MAX && VAR[i][0];i++)
+	{
+		if (memcmp(VAR[i],ch,8) == 0)
 		{
 			if (! flags) 
 			{
@@ -390,14 +401,16 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 			memmove(env,ENVI[i],MAX_ENV_LEN);
 			return 1;
 		}
+		if (!j && VAR[i][0] == '@') j = i;
 	}
 	if (flags || i >= VAR_MAX)
 		return 0;
+	i = (j?j:i);
 	memmove(VAR[i],ch,MAX_VAR_LEN);
 	SETVAR:
 	if (env[0] == 0)
 	{
-		memset(VAR[i],0,MAX_VAR_LEN);
+		VAR[i][0] = '@';
 		memset(ENVI[i],0,MAX_ENV_LEN);
 	}
 	else

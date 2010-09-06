@@ -20,5 +20,5 @@ for file in *.c;do
 	gcc -nostdlib -I./include/ -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE $file -o $OUT || continue
 	objcopy -O binary $OUT ./bin/${file%*.c} || continue
 	rm -f ./zip/${file%*.c}.zip
-	zip -9 -j -q ./zip/${file%*.c}.zip $file ${file%*.c}.h include/${file%*.c}.h ./bin/${file%*.c}
+	zip -9 -j -q "./zip/${file%*.c}-${DATE}.zip" $file ${file%*.c}.h include/${file%*.c}.h ./bin/${file%*.c}
 done
