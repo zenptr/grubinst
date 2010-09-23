@@ -242,6 +242,8 @@ devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, u
 #define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[47]))
 #define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[48]))
 #define get_mmap_entry ((int (*)(char *,int))((*(int **)0x8300)[49]))
+#define getrtsecs ((int (*)(void))((*(int **)0x8300)[50]))
+//int getrtsecs (void);
 //#define graphics_get_font ((unsigned char *(*)(void))((*(int **)0x8300)[51]))
 
 
@@ -407,6 +409,7 @@ struct term_entry
   const char *name;
   /* The feature flags defined above.  */
   unsigned long flags;
+  unsigned short chars_per_line;
   /* Default for maximum number of lines if not specified */
   unsigned short max_lines;
   /* Put a character.  */

@@ -257,6 +257,7 @@ static int wenv_func(char *arg, int flags)
 			{
 				ret = builtin_cmd(cmd, arg, flags);
 			}
+			if (errnum) return 0;
 			sprintf(arg_new,"0x%X\0",ret);
 			set_envi ("__wenv",arg_new);
 			return ret;

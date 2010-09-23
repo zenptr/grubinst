@@ -63,11 +63,11 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 
 #define VSHADOW VSHADOW1
 #define VSHADOW1 ((unsigned char *)0x3A0000)
-#define VSHADOW2 ((unsigned char *)0x3A9600)
-#define VSHADOW4 ((unsigned char *)0x3B2C00)
-#define VSHADOW8 ((unsigned char *)0x3BC200)
+#define VSHADOW2 ((unsigned char *)0x3AEA60)
+#define VSHADOW4 ((unsigned char *)0x3BDC40)
+#define VSHADOW8 ((unsigned char *)0x3CBF20)
 //#define text ((unsigned long *)0x3C5800)
-#define TEXT ((unsigned long (*)[80])0x3C5800)
+#define TEXT ((unsigned long (*)[x1])0x3FC000)
 
 static int fontfile_func (char *arg ,int flags);
 static void graphics_cursor (int set);
@@ -93,9 +93,9 @@ static int graphics_highlight_color = A_REVERSE;
 
 //int disable_space_highlight = 0;
 #define x0 0
-#define x1 80
+#define x1 current_term->chars_per_line
 #define y0 0
-#define y1 30
+#define y1 current_term->max_lines
 
 //static char *g_prf = 0x400000;
 
@@ -192,7 +192,7 @@ graphics_cursor (int set)
 	invert = (ch & 0xffff0000) != 0;
 
 	dbcs_ending_byte = 0;
-	offset = cursorY * 80 + fontx;
+	offset = cursorY * x1 + fontx;
 	pat = font8x16;
 	ch1 = ch & 0xff;
 	pat += (ch1 << 4);
@@ -222,7 +222,7 @@ graphics_cursor (int set)
     {
         MapMask(15);
         ptr = mem;
-        for (i = 0; i < 16; i++, ptr += 80)
+        for (i = 0; i < 16; i++, ptr += x1)
        	{
 //            cursorBuf[i] = pat[i];
             *ptr = ~pat[i];
@@ -232,7 +232,7 @@ graphics_cursor (int set)
 
 write_char:
 
-	for (i = 0; i < 16; i++, offset += 80)
+	for (i = 0; i < 16; i++, offset += x1)
 	{
 		unsigned char m, p, c1, c2, c4, c8;
 
@@ -261,7 +261,7 @@ write_char:
 
         MapMask(i);
         ptr = mem;
-        for (j = 0; j < 16; j++, ptr += 80)
+        for (j = 0; j < 16; j++, ptr += x1)
             *ptr = chr[j + offset];
     }
 
@@ -273,7 +273,7 @@ write_char:
 
 		/* reset the mem position */
 		mem++;//mem += 1;//mem = (unsigned char*)VIDEOMEM + offset;
-		offset = cursorY * 80 + fontx + 1;
+		offset = cursorY * x1 + fontx + 1;
 		pat = chsb;
 		graphics_setxy(fontx + 1, fonty);
 		goto write_char;
