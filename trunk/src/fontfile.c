@@ -42,10 +42,11 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 #define BASE_FONT_ADDR 0x400000
 
 #define VSHADOW VSHADOW1
+#define VSHADOW_SIZE 60000
 #define VSHADOW1 ((unsigned char *)0x3A0000)
-#define VSHADOW2 ((unsigned char *)0x3AEA60)
-#define VSHADOW4 ((unsigned char *)0x3BDC40)
-#define VSHADOW8 ((unsigned char *)0x3CBF20)
+#define VSHADOW2 (VSHADOW1 + VSHADOW_SIZE)
+#define VSHADOW4 (VSHADOW2 + VSHADOW_SIZE)
+#define VSHADOW8 (VSHADOW4 + VSHADOW_SIZE)
 #define text ((unsigned long *)0x3FC000)
 
 static int dbcs_ending_byte = 0;

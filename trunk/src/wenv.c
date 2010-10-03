@@ -32,11 +32,13 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-09-30
+   1.调整calc函数。
  2010-09-06
 	1.修正一个逻辑错误（在释放变量的时候）。
 	http://bbs.wuyou.com/viewthread.php?tid=159851&page=25#pid2033990
  2010-08-08 1.read 函数读取的文件允许使用":"符号注释.使用":"开头,这一行将不会执行.
-			2.解决当使用read可能导致出错的问题.
+	2.解决当使用read可能导致出错的问题.
  */
 #include "grub4dos.h"
 //#define DEBUG
@@ -64,7 +66,7 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 static int replace_str(char *in,char *out,int flags); 
 
 
-static unsigned long long read_val(char **str_ptr); /*读取一个数值(用于计算器).*/
+static int read_val(char **str_ptr,unsigned long long *val); /*读取一个数值(用于计算器).*/
 static unsigned long calc (char *arg);/*简单计算器模块,参数是一个字符串*/
 
 /*把ch指针指向的字符串按unicode编码并写入到地址addr*/
@@ -298,7 +300,7 @@ static int replace_str(char *in, char *out, int flags)
 	char ch[MAX_VAR_LEN]="\0";
 	char value[512];
 	memset(out, 0, MAX_ENV_LEN);
-	while (*in && po - out < MAX_ENV_LEN)
+	while (*in && out - po < MAX_ENV_LEN)
 	{
 		switch(*(p = in))
 		{
@@ -419,136 +421,155 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 	return 1;
 };
 
-static unsigned long long read_val(char **str_ptr)
+static int read_val(char **str_ptr,unsigned long long *val)
 {
-	char *p;
-	char *arg = *str_ptr;
-	unsigned long long val_t;
-	unsigned long long val;
-	while (*arg == ' ' || *arg == '\t') arg++;
-	p = arg;
-	if (*arg == '*') arg++;
-	if (! safe_parse_maxint_with_suffix (&arg, &val_t , 0))
-	{
-		return 0;
-	}
-	val = val_t;
-	if (*p == '*')
-	{
-		val = *(unsigned long long *)(unsigned long)val_t;
-	}
-	while (*arg == ' ' || *arg == '\t') arg++;
-	*str_ptr = arg;
-	return val;
+      char *p;
+      char *arg = *str_ptr;
+      while (*arg == ' ' || *arg == '\t') arg++;
+      p = arg;
+      if (*arg == '*') arg++;
+      
+      if (! safe_parse_maxint_with_suffix (&arg, val, 0))
+      {
+	 return 0;
+      }
+      
+      if (*p == '*')
+      {
+	 *val = *((unsigned long long *)(int)*val);
+      }
+      
+      while (*arg == ' ' || *arg == '\t') arg++;
+      *str_ptr = arg;
+      return 1;
 }
 
 static unsigned long calc (char *arg)
 {
-	#ifdef DEBUG
-	if (debug > 1)
-		printf("calc_arg:%s\n",arg);
-	#endif
-	unsigned long long val_t;
-	unsigned long long *val, val1, val2 = 0;
-	unsigned char O;
-	char *P = arg;
-	unsigned char var[MAX_VAR_LEN] = "\0";
-	val = &val1;
-	if (*P == '*') arg++;
-	if (! safe_parse_maxint (&arg, &val_t))
-	{
-		int i;
-		for (i=0;i<MAX_VAR_LEN;i++)
-		{
-			if ((arg[i] == '=') || (arg[i] < 48)) break;
-			var[i] = arg[i];
-		}
-		arg = skip_to(1,arg);
-		errnum = 0;
-		val1 = read_val(&arg);
-		goto GET_VAL2;
-	}
+   #ifdef DEBUG
+   if (debug > 1)
+       printf("calc_arg:%s\n",arg);
+   #endif
+   char envi[600] = "\0";;
+   unsigned long long val1 = 0;
+   unsigned long long val2 = 0;
+   unsigned long long *p_result = &val1;
+   char O;
+   
+   if (*arg == '*')
+   {
+      arg++;
+      if (! safe_parse_maxint_with_suffix (&arg, &val1, 0))
+      {
+	 return 0;
+      }
+      p_result = (unsigned long long *)(int)val1;
+   }
+   else
+   {
+      if (!read_val(&arg, p_result))
+      {
+	 int i;
+	 for (i=0;i<MAX_VAR_LEN;i++)
+	 {
+	    if ((*arg == '=') || (*arg < 48)) break;
+	    envi[i] = *arg++;
+	 }
+	 envi[i] = 0;
+	 errnum = 0;
+      }
+   }
+   
+   while (*arg == ' ') arg++;
 
-	val1 = (val_t);
+   if ((arg[0] == arg[1]) && (arg[0] == '+' || arg[0] == '-'))
+   {
+      if (arg[0] == '+')
+	 (*p_result)++;
+      else
+	 (*p_result)--;
+      arg += 2;
+      while (*arg == ' ') arg++;
+   }
 
-	if (*P == '*') 
-	{
-		val = (unsigned long long *)(unsigned long)(val_t);
-		val1 = *val;
-	}
-	
-	while (*arg == ' ' || *arg == '\t') arg++;
-	if (*arg == '=')
-	{
-		arg++;
-		*val = val1 = read_val(&arg);
-	}
-GET_VAL2:
-	while (*arg)
-	{
-		val2 = 0ULL;
-		O = *arg;
-		arg++;
-		if (O == '>' || O == '<')
-		{
-			if (*arg != O)
-				return 0;
-			arg++;
-		}
-		else if ((O == '+' || O == '-') && (*arg == O))
-		{
-			val2 = 1ULL;
-			arg++;
-		}
-		if (!val2)
-			val2 = read_val(&arg);
-		switch(O)
-		{
-			case '+':
-				*val += val2;
-				break;
-			case '-':
-				*val -= val2;
-				break;
-			case '*':
-				*val *= val2;
-				break;
-			case '/':
-				*(unsigned long *)val /= (unsigned long)val2;
-				break;
-			case '%':
-				*(unsigned long *)val %= (unsigned long)val2;
-				break;
-			case '&':
-				*val &= val2;
-				break;
-			case '|':
-				*val |= val2;
-				break;
-			case '^':
-				*val ^= val2;
-				break;
-			case '<':
-				*val <<= val2;
-				break;
-			case '>':
-				*val >>= val2;
-				break;
-			default:
-				return 0;
-		}
-	}
-	val1 = *val;
-	if (debug > 0)
-		printf(" %ld (HEX:0x%lX)\n",val1,val1);
-	if (var[0])
-	{
-		char envi[256];
-		sprintf(envi,"%d\0",val1);
-		set_envi(var,envi);
-	}
-	errnum = 0;
-	return val1;
+   if (*arg == '=')
+   {
+      arg++;
+      if (! read_val(&arg, p_result))
+	 return 0;
+   }
+   else 
+   {
+      envi[0] = 0;
+      if (p_result != &val1)
+      {
+	 val1 = *p_result;
+	 p_result = &val1;
+      }
+   }
+   while (*arg)
+   {
+      val2 = 0ULL;
+      O = *arg;
+      arg++;
+
+      if (O == '>' || O == '<')
+      {
+	 if (*arg != O)
+		 return 0;
+	 arg++;
+      }
+      
+      if (! read_val(&arg, &val2))
+	 return 0;
+
+      switch(O)
+      {
+	 case '+':
+		 *p_result += val2;
+		 break;
+	 case '-':
+		 *p_result -= val2;
+		 break;
+	 case '*':
+		 *p_result *= val2;
+		 break;
+	 case '/':
+		 *(unsigned long *)p_result /= (unsigned long)val2;
+		 break;
+	 case '%':
+		 *(unsigned long *)p_result %= (unsigned long)val2;
+		 break;
+	 case '&':
+		 *p_result &= val2;
+		 break;
+	 case '|':
+		 *p_result |= val2;
+		 break;
+	 case '^':
+		 *p_result ^= val2;
+		 break;
+	 case '<':
+		 *p_result <<= val2;
+		 break;
+	 case '>':
+		 *p_result >>= val2;
+		 break;
+	 default:
+		 return 0;
+      }
+   }
+   
+   if (debug > 0)
+	  printf(" %ld (HEX:0x%lX)\n",*p_result,*p_result);
+   
+   if (envi[0] != 0)
+   {
+      sprintf(&envi[8],"%ld\0",*p_result);
+      set_envi(envi,&envi[8]);
+   }
+   errnum = 0;
+   return *p_result;
 };
 
 static int ascii_unicode(const char *ch,char *addr)
@@ -596,7 +617,7 @@ grub_memcmp (const char *s1, const char *s2, int n)
   {
 	if (*s1 < *s2)
 	{
-		if  (*s1 >='A' && *s1 <= 'Z' && *s1 + 32 == *s2)
+		if  (*s1 >='A' && *s1 <= 'Z' && *s1 | 32 == *s2)
 			continue;
 		return -1;
 	}
