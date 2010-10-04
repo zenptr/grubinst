@@ -32,19 +32,30 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-10-05
+   1.æ·»åŠ å­—ç¬¦ä¸²å¤„ç†åŠŸèƒ½,å’Œlinux shellç±»ä¼¼.
+      1).${VAR:x:y}  ä»xå¼€å§‹æå–yä¸ªå­—ç¬¦,å¦‚æœxä¸ºè´Ÿæ•°åˆ™ä»å€’æ•°xä¸ªå¼€å§‹æå–.
+      
+      ä»¥ä¸‹æå–çš„å†…å®¹éƒ½ä¸åŒ…å«STRINGå­—ç¬¦ä¸².
+      2).${VAR#STRING}	æå–STRINGå­—ç¬¦ä¸²åé¢çš„å†…å®¹,ä»å·¦å¾€å³ç¬¬ä¸€ä¸ªä½ç½®å¼€å§‹.
+      3).${VAR##STRING} æå–STRINGå­—ç¬¦ä¸²åé¢çš„å†…å®¹,ä»å³å¾€å·¦ç¬¬ä¸€ä¸ªä½ç½®å¼€å§‹.
+      4).${VAR%STRING}	æå–STRINGå­—ç¬¦ä¸²å‰é¢çš„å†…å®¹,ä»å³å¾€å·¦ç¬¬ä¸€ä¸ªä½ç½®å¼€å§‹.
+      5).${VAR%%STRING}	æå–STRINGå­—ç¬¦ä¸²å‰é¢çš„å†…å®¹,ä»å·¦å¾€å³ç¬¬ä¸€ä¸ªä½ç½®å¼€å§‹.
+ 2010-10-04
+   1.å‡½æ•°è°ƒæ•´.
  2010-09-30
-   1.µ÷Õûcalcº¯Êı¡£
+   1.è°ƒæ•´calcå‡½æ•°ã€‚
  2010-09-06
-	1.ĞŞÕıÒ»¸öÂß¼­´íÎó£¨ÔÚÊÍ·Å±äÁ¿µÄÊ±ºò£©¡£
+	1.ä¿®æ­£ä¸€ä¸ªé€»è¾‘é”™è¯¯ï¼ˆåœ¨é‡Šæ”¾å˜é‡çš„æ—¶å€™ï¼‰ã€‚
 	http://bbs.wuyou.com/viewthread.php?tid=159851&page=25#pid2033990
- 2010-08-08 1.read º¯Êı¶ÁÈ¡µÄÎÄ¼şÔÊĞíÊ¹ÓÃ":"·ûºÅ×¢ÊÍ.Ê¹ÓÃ":"¿ªÍ·,ÕâÒ»ĞĞ½«²»»áÖ´ĞĞ.
-	2.½â¾öµ±Ê¹ÓÃread¿ÉÄÜµ¼ÖÂ³ö´íµÄÎÊÌâ.
+ 2010-08-08 1.read å‡½æ•°è¯»å–çš„æ–‡ä»¶å…è®¸ä½¿ç”¨":"ç¬¦å·æ³¨é‡Š.ä½¿ç”¨":"å¼€å¤´,è¿™ä¸€è¡Œå°†ä¸ä¼šæ‰§è¡Œ.
+	2.è§£å†³å½“ä½¿ç”¨readå¯èƒ½å¯¼è‡´å‡ºé”™çš„é—®é¢˜.
  */
 #include "grub4dos.h"
 //#define DEBUG
-#define BASE_ADDR 0x45000 //±äÁ¿±£´æµØÖ·
-#define VAR ((char (*)[8])BASE_ADDR)
-#define ENVI ((char (*)[512])(BASE_ADDR + 0x200))
+#define BASE_ADDR 0x45000 //å˜é‡ä¿å­˜åœ°å€
+#define VAR ((char (*)[8])BASE_ADDR) //å˜é‡ç´¢å¼•è¡¨ å…±è®¡ 8*64 = 512
+#define ENVI ((char (*)[512])(BASE_ADDR + 0x200)) //å˜é‡å¯¹åº”çš„å€¼ å…±è®¡512*64 = 32768
 #define VAR_MAX 64
 
 #define MAX_ARG_LEN 1024
@@ -58,28 +69,29 @@ static int wenv_help(void);
 static int grub_memcmp (const char *s1, const char *s2, int n);
 
 /* 
-arg±È½ÏÀ´Ô´×Ö·û´®,stringÒª¶Ô±ÈµÄ×Ö·û´®.
-¹¦ÄÜ:
-²ÎÊı±È½Ï(ÀàËÆÓÚstrcmp£¬µ«ÊÇÕâÀï×÷ÁËÀ©Õ¹)
-1.arg¿ÉÒÔ±Èstring³¤;Ê¹ÓÃ¿Õ¸ñ' ',ÖÆ±í·û'\t',µÈÓÚºÅ'=' ·Ö¸ô²ÎÊı;
-2.Èç¹ûstring×Ö·û´®È«²¿ÊÇĞ¡Ğ´×Ö·û,Ôò²»Çø·Ö´óĞ¡Ğ´½øĞĞ±È½Ï.
+argæ¯”è¾ƒæ¥æºå­—ç¬¦ä¸²,stringè¦å¯¹æ¯”çš„å­—ç¬¦ä¸².
+åŠŸèƒ½:
+å‚æ•°æ¯”è¾ƒ(ç±»ä¼¼äºstrcmpï¼Œä½†æ˜¯è¿™é‡Œä½œäº†æ‰©å±•)
+1.argå¯ä»¥æ¯”stringé•¿;ä½¿ç”¨ç©ºæ ¼' ',åˆ¶è¡¨ç¬¦'\t',ç­‰äºå·'=' åˆ†éš”å‚æ•°;
+2.å¦‚æœstringå­—ç¬¦ä¸²å…¨éƒ¨æ˜¯å°å†™å­—ç¬¦,åˆ™ä¸åŒºåˆ†å¤§å°å†™è¿›è¡Œæ¯”è¾ƒ.
 */
 #define strcmp_ex(arg,string) grub_memcmp(arg,string,0)
+static char *strstrn(const char *s1,const char *s2,const int n);
 
 static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags);
 #define set_envi(var,val) envi_cmd(var,val,0)
 #define get_env(var,val) envi_cmd(var,val,1)
 /*
-  ±äÁ¿Ìæ»»Ö÷Òªº¯Êı,°ÑinÀïÃæµÄ±äÁ¿À©Õ¹ºóÊä³öµ½out 
-  Èç¹ûflagsÖµÎªÕæÔò,Èç¹ûÅöµ½Ç°µ¼*µÄÊı×Ö,³¢ÊÔ¶ÁÈ¡¸ÃÄÚ´æÖ¸ÏòµÄ×Ö·û´®Êı¾İ.
+  å˜é‡æ›¿æ¢ä¸»è¦å‡½æ•°,æŠŠiné‡Œé¢çš„å˜é‡æ‰©å±•åè¾“å‡ºåˆ°out 
+  å¦‚æœflagså€¼ä¸ºçœŸåˆ™,å¦‚æœç¢°åˆ°å‰å¯¼*çš„æ•°å­—,å°è¯•è¯»å–è¯¥å†…å­˜æŒ‡å‘çš„å­—ç¬¦ä¸²æ•°æ®.
 */
 static int replace_str(char *in,char *out,int flags); 
 
 
-static int read_val(char **str_ptr,unsigned long long *val); /*¶ÁÈ¡Ò»¸öÊıÖµ(ÓÃÓÚ¼ÆËãÆ÷).*/
-static unsigned long calc (char *arg);/*¼òµ¥¼ÆËãÆ÷Ä£¿é,²ÎÊıÊÇÒ»¸ö×Ö·û´®*/
+static int read_val(char **str_ptr,unsigned long long *val); /*è¯»å–ä¸€ä¸ªæ•°å€¼(ç”¨äºè®¡ç®—å™¨).*/
+static unsigned long calc (char *arg);/*ç®€å•è®¡ç®—å™¨æ¨¡å—,å‚æ•°æ˜¯ä¸€ä¸ªå­—ç¬¦ä¸²*/
 
-/*°ÑchÖ¸ÕëÖ¸ÏòµÄ×Ö·û´®°´unicode±àÂë²¢Ğ´Èëµ½µØÖ·addr*/
+/*æŠŠchæŒ‡é’ˆæŒ‡å‘çš„å­—ç¬¦ä¸²æŒ‰unicodeç¼–ç å¹¶å†™å…¥åˆ°åœ°å€addr*/
 static int ascii_unicode(const char *ch,char *addr);
 
 static int read_file(char *arg);
@@ -120,7 +132,7 @@ static int wenv_func(char *arg, int flags)
 	
 	if (! strcmp_ex((char *)BASE_ADDR,"__wenv") == 0 )
 	{
-		memset((char *)BASE_ADDR,0,512);
+		memset((char *)BASE_ADDR,0,512);//åªæ¸…é™¤å˜é‡ç´¢å¼•è¡¨
 		sprintf((char *)BASE_ADDR,"__wenv");
 	}
 	
@@ -178,7 +190,8 @@ static int wenv_func(char *arg, int flags)
 			}
 			else
 			{
-				replace_str(arg,arg_new,1);
+				if (!replace_str(arg,arg_new,1))
+				    return 0;
 			}
 			
 			if (ucase == 1)
@@ -222,7 +235,7 @@ static int wenv_func(char *arg, int flags)
 		  else if(strcmp_ex(arg,"run") == 0)
 		{
 			arg = skip_to(0,arg);
-			replace_str(arg,arg_new,1);
+			if (!replace_str(arg,arg_new,1)) return 0;
 			#ifdef DEBUG
 			if (debug >1)
 			printf("%s\n",arg_new);
@@ -260,8 +273,8 @@ static int wenv_func(char *arg, int flags)
 					continue;
 				}
 			}
-			arg = skip_to(0,cmd); /* È¡µÃ²ÎÊı²¿·İ */
-			nul_terminate(cmd); /* È¡µÃÃüÁî²¿·İ */
+			arg = skip_to(0,cmd); /* å–å¾—å‚æ•°éƒ¨ä»½ */
+			nul_terminate(cmd); /* å–å¾—å‘½ä»¤éƒ¨ä»½ */
 			if (strcmp_ex(cmd, "echo") == 0)
 			{
 				ret = printf("%s\n",arg);
@@ -278,7 +291,7 @@ static int wenv_func(char *arg, int flags)
 		  else if (strcmp_ex(arg, "calc") == 0)
 		{
 			arg = skip_to(0,arg);
-			replace_str(arg,arg_new,0);
+			if (!replace_str(arg,arg_new,0)) return 0;
 			return calc(arg_new);
 		}
 		else if (strcmp_ex(arg, "reset") == 0)
@@ -304,80 +317,158 @@ return printf("\n WENV Using variables in GRUB4DOS,Compiled time: %s %s\n\
 
 static int replace_str(char *in, char *out, int flags)
 {
-	char *po = out;
-	char *p = in;
-	int i;
-	unsigned long long addr;
-	char ch[MAX_VAR_LEN]="\0";
-	char value[512];
-	memset(out, 0, MAX_ENV_LEN);
-	while (*in && out - po < MAX_ENV_LEN)
-	{
-		switch(*(p = in))
-		{
-			case '*':/*µ±flagsÎªÕæÊ± Ìæ»»ÃüÁî²ÎÊıÎªÄÚ´æµØÖ·Ö¸ÏòµÄ×Ö·û´®*/
-				if (! flags)
-				{
-					*out++ = *in++;
-					continue;
-				}
-				p++;
-				if (! safe_parse_maxint (&p, &addr))
-				{
-					errnum = 0;
-					*out++ = *in++;
-					continue;
-				}
-				in = p;
-				p = (char *)(unsigned long)addr;
-				while (*p && *p != '\r' && *p != '\n') *out++ = *p++;
-				break;
-				
-			case '$':/*Ìæ»»±äÁ¿,Èç¹ûÕâ¸ö±äÁ¿²»·ûºÏ²»Ìæ»»±£³ÖÔ­À´µÄ×Ö·û´®*/
-				
-				if (p[1] != '{')
-				{
-					*out++ = *in++;
-					continue;
-				}
-				
-				p += 2;
-				
-				memset(ch,0,MAX_VAR_LEN);
-				for (i=0;i<MAX_VAR_LEN;i++)
-				{
-					if (*p == '}')
-						break;
-					ch[i] = *p++;
-				}
-				
-				if (*p != '}')
-				{
-					*out++ = *in++;
-					continue;
-				}
-				
-				in = ++p;
-				
-				memset(value,0,MAX_ENV_LEN);
-				if (get_env(ch,value))
-				{
-					p = value;
-					while (*p) *out++ = *p++;
-				}
-				
-				break;
+   char *po = out;
+   char *p = in;
+   int i;
+   unsigned long long addr;
+   char ch[MAX_VAR_LEN]="\0";
+   char value[512];
+   memset(out, 0, MAX_ENV_LEN);
+   while (*in && out - po < MAX_ENV_LEN)
+   {
+      switch(*(p = in))
+      {
+         case '*':/*å½“flagsä¸ºçœŸæ—¶ æ›¿æ¢å‘½ä»¤å‚æ•°ä¸ºå†…å­˜åœ°å€æŒ‡å‘çš„å­—ç¬¦ä¸²*/
+            if (! flags)
+            {
+               *out++ = *in++;
+               continue;
+            }
+            p++;
+            if (! safe_parse_maxint (&p, &addr))
+            {
+               errnum = 0;
+               *out++ = *in++;
+               continue;
+            }
+            in = p;
+            p = (char *)(unsigned long)addr;
+            while (*p && *p != '\r' && *p != '\n') *out++ = *p++;
+            break;
+            
+         case '$':/*æ›¿æ¢å˜é‡,å¦‚æœè¿™ä¸ªå˜é‡ä¸ç¬¦åˆä¸æ›¿æ¢ä¿æŒåŸæ¥çš„å­—ç¬¦ä¸²*/
+            
+            if (p[1] != '{')
+            {
+               *out++ = *in++;
+               continue;
+            }
+            
+            p += 2;
+            
+            long long start = 0LL;//æå–å­—ç¬¦èµ·å§‹ä½ç½®
+            unsigned long long len=-1ULL;//æå–å­—ç¬¦ä¸²é•¿åº¦
+            int str_flag = 0;
+            str_flag = 0;
+            memset(ch,0,MAX_VAR_LEN);
+            for (i=0;i<MAX_VAR_LEN;i++)
+            {
+               if (*p == '}') //æå–å˜é‡æˆåŠŸ.
+               {
+                  break;
+               }
+               else if (*p == ':') //æˆªå–æŒ‡å®šé•¿åº¦å­—ç¬¦ä¸²å…³é”®å­—ç¬¦
+	       {
+		  p++;
+		  if (! safe_parse_maxint (&p, &start)) //èµ·å§‹ä½ç½®
+		  {
+		     break;//ä¸ç¬¦å·è¦æ±‚,åˆ™ä¸å¤„ç†.å¦‚æœåé¢åˆšå¥½æ˜¯ä¸€ä¸ª"}"åˆ™ç›¸å½“äºè¿‡æ»¤æ‰äº†":"
+		  }
+		  if (*p == ':' && (p++,! safe_parse_maxint (&p, &len)))//é•¿åº¦,éå¿…è¦çš„
+		  {
+		     break;//åŒä¸Š
+		  }
+		  break;//ä¸å†åˆ¤æ–­,ç›´æ¥é€€å‡º.
+	       }
+	       else if (*p == '#')
+	       {
+		  if (*++p == '#')
+		  {
+		     p++;
+		     str_flag = 3;
+		  }
+		  else
+		     str_flag = 2;
 
-			default:/* Ä¬ÈÏ²»Ìæ»»Ö±½Ó¸´ÖÆ×Ö·û*/
-				*out++ = *in++;
-				break;
-		}
-	}
-	#ifdef DEBUG
-		if (debug > 1)
-			printf("replace_str:%s\n",po);
-	#endif
-	return 1;
+		  if (*p == '*') p++;
+		  start = (long long)(int)p;//è®¾å®šèµ·å§‹ä½ç½®(ä¿å­˜çš„æ˜¯ä¸€ä¸ªæŒ‡é’ˆæ•°å€¼)
+		  len = 0;//å­—ç¬¦ä¸²é•¿åº¦,åé¢éœ€è¦è·³è¿‡è¿™äº›å­—ç¬¦.
+		  while (*p && *p != '}')//è·³è¿‡åé¢çš„å­—ç¬¦
+		  {
+		     len++;
+		     p++;
+		  }
+		  break;
+	       }
+	       else if (*p == '%')
+	       {
+       		  if (*++p == '%')
+       		  {
+		     str_flag = 4;
+		     p++;
+		  }
+		  else
+		     str_flag = 5;
+
+		  start = (long long)(int)p;//è®¾å®šèµ·å§‹ä½ç½®(ä¿å­˜çš„æ˜¯ä¸€ä¸ªæŒ‡é’ˆæ•°å€¼);
+		  while (*p && *p != '}') p++;//è·³è¿‡åé¢çš„å­—ç¬¦
+		  if (*(p-1) == '*') *(p-1) = '\0'; //æˆªæ–­
+		  break;
+	       }
+               ch[i] = *p++;
+            }
+            errnum = 0;
+            if (*p != '}')
+            {
+               *out++ = *in++;
+               continue;
+            }
+	    *p = '\0'; //æˆªæ–­
+            in = ++p;
+            
+            memset(value,0,MAX_ENV_LEN);
+            if (get_env(ch,value))
+            {
+	       if (str_flag)
+	       {
+		  if (! (p = strstrn(value, (char *)(int)start, str_flag & 1)))
+		     continue;
+		  if (str_flag & 4)
+		  {
+		     len = p - value;
+		     p = value;
+		  }
+		  else
+		  {
+		     p += len;
+		     len = -1;
+		  }
+	       }
+	       else
+	       {
+		  if (start < 0) start += strlen(value);
+		  p = value + start;
+	       }
+
+               while (*p && len)
+               {
+		  *out++ = *p++;
+		  len--;
+	       }
+            }
+            
+            break;
+
+         default:/* é»˜è®¤ä¸æ›¿æ¢ç›´æ¥å¤åˆ¶å­—ç¬¦*/
+            *out++ = *in++;
+            break;
+      }
+   }
+   #ifdef DEBUG
+      if (debug > 1)
+         printf("replace_str:%s\n",po);
+   #endif
+   return 1;
 };
 
 static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
@@ -385,7 +476,7 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 	int i,j;
 	char ch[MAX_VAR_LEN]="\0";
 
-	if (flags == 2)//ÏÔÊ¾ËùÓĞ±äÁ¿ĞÅÏ¢
+	if (flags == 2)//æ˜¾ç¤ºæ‰€æœ‰å˜é‡ä¿¡æ¯
 	{
 		for(i=0;i <= VAR_MAX && VAR[i][0];i++)
 		{
@@ -401,7 +492,7 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 		return 1;
 	}
 
-	if (strlen(var) == 0) return !printf("Err2");//Èç¹ûvarÎª¿Õ¡£
+	if (strlen(var) == 0) return !printf("Err2");//å¦‚æœvarä¸ºç©ºã€‚
 	strcpy(ch,var);
 	j = 0;
 	for(i=0;i <= VAR_MAX && VAR[i][0];i++)
@@ -417,7 +508,7 @@ static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags)
 		}
 		if (!j && VAR[i][0] == '@') j = i;
 	}
-	if (flags || i >= VAR_MAX)
+	if (flags || i > VAR_MAX)
 		return 0;
 	i = (j?j:i);
 	memmove(VAR[i],ch,MAX_VAR_LEN);
@@ -601,29 +692,53 @@ static int ascii_unicode(const char *ch,char *addr)
 
 static char *upper(char *string)
 {
+#if 0
 	char *P=string;
 	while (*P)
 	{
-		if (*P >= 'a' && *P <= 'z') *P &= 0xDF;//Î»5ÉèÎª0¾ÍÊÇ´óĞ´
+		if (*P >= 'a' && *P <= 'z') *P &= 0xDF;//ä½5è®¾ä¸º0å°±æ˜¯å¤§å†™
 		P++;
 	}
+#else
+   char *P=string;
+   while (*P != '\0')
+   {
+      if ((unsigned char)(*P - 'a') < 26)
+      {
+	 *P &= 0xDF;
+      }
+      P++;
+   }
+#endif
 	return string;
 }
 
 static char *lower(char *string)
 {
+#if 0
 	char *P=string;
 	while (*P)
 	{
-		if (*P >= 'A' && *P <= 'Z') *P |= 32;//Î»5ÉèÎª1¾ÍÊÇĞ¡Ğ´
+		if (*P >= 'A' && *P <= 'Z') *P |= 32;//ä½5è®¾ä¸º1å°±æ˜¯å°å†™
 		P++;
 	}
+#else
+   char *P = string;
+   while (*P != '\0')
+   {
+      if ((unsigned char)(*P - 'A') < 26)
+      {
+	 *P |= 32;
+      }
+      P++;
+   }
+#endif
 	return string;
 }
 
 static int
 grub_memcmp (const char *s1, const char *s2, int n)
-{//Èç¹ûn=0,ÔòÖ´ĞĞÀ©Õ¹±È½ÏÒ²¾ÍÊÇstrcmp_ex
+{//å¦‚æœn=0,åˆ™æ‰§è¡Œæ‰©å±•æ¯”è¾ƒä¹Ÿå°±æ˜¯strcmp_ex
    int i = n;
    if (i == 0) i = strlen(s2);
    for (;i;*s1++,*s2++,i--)
@@ -639,6 +754,31 @@ grub_memcmp (const char *s1, const char *s2, int n)
       return 0;
 
    return 1;
+}
+
+/*
+   static char *strstrn(const char *s1,const char *s2,const int n)
+   åŠŸèƒ½ï¼šä»å­—ç¬¦ä¸²s1ä¸­å¯»æ‰¾s2çš„ä½ç½®ï¼ˆä¸æ¯”è¾ƒç»“æŸç¬¦NULL).
+   è¯´æ˜ï¼šå¦‚æœæ²¡æ‰¾åˆ°åˆ™è¿”å›NULLã€‚nä¸º0 æ—¶è¿”å›æŒ‡å‘ç¬¬ä¸€æ¬¡å‡ºç°s1ä½ç½®çš„æŒ‡é’ˆï¼Œå¦åˆ™è¿”å›æœ€åä¸€æ¬¡å‡ºç°çš„æŒ‡é’ˆ.
+*/
+static char *strstrn(const char *s1,const char *s2,const int n)
+{
+   if (n == 0)//nä¸º0ç›´æ¥è°ƒç”¨strstrè¿”å›ç¬¬ä¸€æ¬¡å‡ºç°çš„æŒ‡é’ˆ,æ³¨:strstr å¦‚æœæ²¡æœ‰æ‰¾åˆ°æ—¶ä¼šè¿”å›NULL.
+   {
+      return strstr(s1,s2);
+   }
+   else
+   {
+      char *p = NULL;
+      char *s;
+      int lens2 = strlen(s2);
+      for (s=strstr(s1,s2);s != NULL;s=strstr(s,s2)) //åœ¨s1ä¸­æŸ¥æ‰¾s2ç›´åˆ°æœ€åä¸€ä¸ª
+      {
+	 p = s;
+	 s += lens2;
+      }
+      return p;
+   }
 }
 
 static char* next_line(char *arg)
@@ -658,12 +798,12 @@ static char* next_line(char *arg)
 	}
 	return 0;
 }
-/*´ÓÖ¸¶¨ÎÄ¼şÖĞ¶ÁÈ¡WENVµÄÃüÁîĞòÁĞ£¬²¢ÒÀ´ÎÖ´ĞĞ*/
+/*ä»æŒ‡å®šæ–‡ä»¶ä¸­è¯»å–WENVçš„å‘½ä»¤åºåˆ—ï¼Œå¹¶ä¾æ¬¡æ‰§è¡Œ*/
 static int read_file(char *arg)
 {
 	if (! open(arg)) return 0;
 	
-	if (filemax > 0x8200) return 0;/*ÏŞÖÆÎÄ¼ş´óĞ¡²»ÄÜ³¬¹ı32KB+512×Ö½Ú*/
+	if (filemax > 0x8200) return 0;/*é™åˆ¶æ–‡ä»¶å¤§å°ä¸èƒ½è¶…è¿‡32KB+512å­—èŠ‚*/
 	char *P,*P1;	
 	P=(char *)0x600000;
 	if (read((unsigned long long)(unsigned int)P,-1,GRUB_READ) != filemax) return 0;
@@ -674,7 +814,7 @@ static int read_file(char *arg)
 	else
 		P1 = P;
 
-	while (P = next_line(P1))/*Ã¿´Î¶ÁÈ¡Ò»ĞĞnext_line»á°ÑĞĞÎ²µÄ»Ø³µ·û¸Ä³É0½Ø¶Ï£¬²¢·µ»ØÏÂÒ»ĞĞµÄÆğÊ¼µØÖ·*/
+	while (P = next_line(P1))/*æ¯æ¬¡è¯»å–ä¸€è¡Œnext_lineä¼šæŠŠè¡Œå°¾çš„å›è½¦ç¬¦æ”¹æˆ0æˆªæ–­ï¼Œå¹¶è¿”å›ä¸‹ä¸€è¡Œçš„èµ·å§‹åœ°å€*/
 	{
 		wenv_func(P1,0);
 		P1 = P;
