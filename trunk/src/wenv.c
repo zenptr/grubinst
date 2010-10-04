@@ -56,6 +56,16 @@ static char arg_new[MAX_ARG_LEN];
 static int wenv_func(char *arg, int flags);
 static int wenv_help(void);
 static int grub_memcmp (const char *s1, const char *s2, int n);
+
+/* 
+arg比较来源字符串,string要对比的字符串.
+功能:
+参数比较(类似于strcmp，但是这里作了扩展)
+1.arg可以比string长;使用空格' ',制表符'\t',等于号'=' 分隔参数;
+2.如果string字符串全部是小写字符,则不区分大小写进行比较.
+*/
+#define strcmp_ex(arg,string) grub_memcmp(arg,string,0)
+
 static int envi_cmd(const char var[MAX_VAR_LEN],char env[MAX_ENV_LEN],int flags);
 #define set_envi(var,val) envi_cmd(var,val,0)
 #define get_env(var,val) envi_cmd(var,val,1)
@@ -108,20 +118,21 @@ static int wenv_func(char *arg, int flags)
 	char var[MAX_VAR_LEN] = "\0";
 	char value[512] = "\0";
 	
-	if (! grub_memcmp((char *)BASE_ADDR,"__wenv",6) == 0 )
+	if (! strcmp_ex((char *)BASE_ADDR,"__wenv") == 0 )
 	{
 		memset((char *)BASE_ADDR,0,512);
 		sprintf((char *)BASE_ADDR,"__wenv");
 	}
+	
 	if (*arg)
 	{
 		memset(arg_new, 0, 1024);
-		if (grub_memcmp(arg,"read",4) == 0)
+		if (strcmp_ex(arg,"read") == 0)
 		{
 			arg = skip_to (0,arg);
 			return read_file(arg);
 		}
-		else if (grub_memcmp(arg,"set",3) == 0)
+		else if (strcmp_ex(arg,"set") == 0)
 		{
 			arg=skip_to(0,arg);
 			if (! *arg) return envi_cmd(NULL,arg_new,2);
@@ -177,7 +188,7 @@ static int wenv_func(char *arg, int flags)
 			
 			return set_envi(var,arg_new);
 		}
-		  else if (grub_memcmp(arg, "get",3) == 0)
+		  else if (strcmp_ex(arg, "get") == 0)
 		{
 			arg=skip_to(0,arg);
 			if (! *arg) return envi_cmd(NULL,arg_new,2);
@@ -208,7 +219,7 @@ static int wenv_func(char *arg, int flags)
 			}
 			return 0;
 		}
-		  else if(grub_memcmp(arg,"run",3) == 0)
+		  else if(strcmp_ex(arg,"run") == 0)
 		{
 			arg = skip_to(0,arg);
 			replace_str(arg,arg_new,1);
@@ -251,7 +262,7 @@ static int wenv_func(char *arg, int flags)
 			}
 			arg = skip_to(0,cmd); /* 取得参数部份 */
 			nul_terminate(cmd); /* 取得命令部份 */
-			if (grub_memcmp(cmd, "echo",4) == 0)
+			if (strcmp_ex(cmd, "echo") == 0)
 			{
 				ret = printf("%s\n",arg);
 			}
@@ -264,13 +275,13 @@ static int wenv_func(char *arg, int flags)
 			set_envi ("__wenv",arg_new);
 			return ret;
 		}
-		  else if (grub_memcmp(arg, "calc",4) == 0)
+		  else if (strcmp_ex(arg, "calc") == 0)
 		{
 			arg = skip_to(0,arg);
 			replace_str(arg,arg_new,0);
 			return calc(arg_new);
 		}
-		else if (grub_memcmp(arg, "reset", 5) == 0)
+		else if (strcmp_ex(arg, "reset") == 0)
 		{
 			memset((char *)BASE_ADDR,0,512);
 			return sprintf((char *)BASE_ADDR,"__wenv");
@@ -593,7 +604,7 @@ static char *upper(char *string)
 	char *P=string;
 	while (*P)
 	{
-		if (*P >= 'a' && *P <= 'z') *P -= 32;
+		if (*P >= 'a' && *P <= 'z') *P &= 0xDF;//位5设为0就是大写
 		P++;
 	}
 	return string;
@@ -604,7 +615,7 @@ static char *lower(char *string)
 	char *P=string;
 	while (*P)
 	{
-		if (*P >= 'A' && *P <= 'Z') *P += 32;
+		if (*P >= 'A' && *P <= 'Z') *P |= 32;//位5设为1就是小写
 		P++;
 	}
 	return string;
@@ -612,18 +623,22 @@ static char *lower(char *string)
 
 static int
 grub_memcmp (const char *s1, const char *s2, int n)
-{
-  for (;n;*s1++,*s2++,n--)
-  {
-	if (*s1 < *s2)
-	{
-		if  (*s1 >='A' && *s1 <= 'Z' && *s1 | 32 == *s2)
-			continue;
-		return -1;
-	}
-	else if (*s1 > *s2) return 1;
-  }
-  return n;
+{//如果n=0,则执行扩展比较也就是strcmp_ex
+   int i = n;
+   if (i == 0) i = strlen(s2);
+   for (;i;*s1++,*s2++,i--)
+   {
+      if  (*s1 == * s2 || ((unsigned char)(*s1 - 'A') < 26 && *s1 | 32 == *s2))
+      {
+	 continue;
+      }
+      else return (*s1 > *s2)?1:-1;
+   }
+
+   if (n != 0 || (*s1 == '\0' || *s1 == ' ' || *s1 == '\t' || *s1 == '='))
+      return 0;
+
+   return 1;
 }
 
 static char* next_line(char *arg)
