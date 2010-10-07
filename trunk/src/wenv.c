@@ -49,6 +49,11 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-10-07
+   1.CALC支持自增/自减运算符++/--,和C语言的语法一样
+   例子,注意执行的顺序.
+   wenv calc a=b++ //结果a=b b=b+1
+   wenv calc a=++b //结果b=b+1 a=b
  2010-10-06
    1.添加 >=,<= 比较符.
    2.支持按数字比较.
@@ -129,6 +134,7 @@ static int read_file(char *arg);				// 读外部文件命令集
 static char *lower(char * const string);			// 小写转换
 static char *upper(char * const string);			// 大写转换
 static char* next_line(char *arg);				// 读下一命令行
+static void strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
@@ -155,6 +161,8 @@ int main()
 
 static int wenv_func(char *arg, int flags)
 {
+   if( ! *arg )
+      return wenv_help();
    int i;
    char var[MAX_VAR_LEN+1] = "\0";
    char value[MAX_ENV_LEN + 1] = "\0";
@@ -163,8 +171,6 @@ static int wenv_func(char *arg, int flags)
    if( 0 != strcmp_ex(VAR[0], "__wenv") )
       reset_env_all();
 
-   if( ! *arg )
-      return wenv_help();
    memset(value,0,MAX_ENV_LEN+1);
 
    if( 0 == strcmp_ex(arg, "read") )
@@ -439,13 +445,9 @@ static int wenv_func(char *arg, int flags)
 		}
 		
 		long long v1 = 0LL,v2=0LL;
-		if (read_val(&p1,&v1)) //如果是数字,执行数字比较
+		if ( !read_val(&p1,&v1) || !read_val(&p2,&v2) ) // 读数字失败就按字符串比较
 		{
-			if (!read_val(&p2,&v2))
-				return (errnum = 0);//前面是数字,后面不是则不比较
-		}
-		else//按字符串进行比较
-		{
+			v1 = 0LL;
 			v2 = grub_memcmp (p2, p1, 0);
 		}
 		errnum = 0; //清除错误信息
@@ -665,12 +667,29 @@ static int replace_str(char *in, char *out, int flags)
    return 1;
 }
 
+static void strcpyn(char *dest,const char *src,int n)
+{
+#ifdef DEBUG
+	if( NULL == dest || NULL == src || n <= 0
+		|| dest >= src && (int)(dest-src) < n
+		|| dest <  src && (int)(src-dest) < n )
+	{
+		printf("strcpyn: bad parameter\n");
+		return;
+	}
+#endif
+   while(*src && n--)
+   {
+      *dest++ = *src++;
+   }
+}
+
 static int envi_cmd(const char *var,char *env,int flags)
 {
 #ifdef DEBUG
 	if( flags < 0 || flags > 3 )
 	{
-		printf("envi_cmd: flags out of range\n");
+		printf("envi_cmd: bad parameter\n");
 		return 0;
 	}
 #endif
@@ -723,7 +742,7 @@ static int envi_cmd(const char *var,char *env,int flags)
    }
 
    char ch[MAX_VAR_LEN +1] = "\0"; //使用ch中转可以保证字符截取正确.
-   strcpy(ch,var);
+   strcpyn(ch,var,MAX_VAR_LEN);
    j = 0;
    /*遍历变量名表
    注: 添加 VAR[i][0] 判断,还有使用删除标记符"@"
@@ -781,8 +800,16 @@ static int envi_cmd(const char *var,char *env,int flags)
 static int read_val(char **str_ptr,unsigned long long *val)
 {
       char *arg = *str_ptr;
+      unsigned long long *val_ptr = val;
+      char *str_ptr1 = NULL;
       while (*arg == ' ' || *arg == '\t') arg++;
-      char *p = arg;
+
+      if (arg[0] == arg[1] && (arg[0] == '+' || arg[0] == '-'))
+      {
+         str_ptr1 = arg;
+         arg += 2;
+      }
+      *str_ptr = arg;
       if (*arg == '*') arg++;
       
       if (! safe_parse_maxint_with_suffix (&arg, val, 0))
@@ -790,14 +817,90 @@ static int read_val(char **str_ptr,unsigned long long *val)
 	 return 0;
       }
       
-      if (*p == '*')
+      if (**str_ptr == '*')
       {
-	 *val = *((unsigned long long *)(int)*val);
+         val_ptr = (unsigned long long *)(int)*val;
+         *val = *val_ptr;
+         if (str_ptr1 == NULL)
+         {
+            str_ptr1 = arg;
+         }
+         if (str_ptr1[0] == str_ptr1[1])
+         {
+            switch(str_ptr1[0])
+            {
+               case '+':
+                  (*val_ptr)++;
+                  str_ptr1 += 2;
+                  break;
+               case '-':
+                  (*val_ptr)--;
+                  str_ptr1 += 2;
+                  break;
+               default:
+                  break;
+            }
+         }
+          if (str_ptr1 < arg)//如果是前面的++/--
+            *val = *val_ptr;
+          else
+            arg = str_ptr1;
       }
-      
-      while (*arg == ' ' || *arg == '\t') arg++;
+      while (*arg == ' ') arg++;
       *str_ptr = arg;
-      return 1;
+      return (int)val_ptr;
+}
+
+static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
+{
+   int i;
+   char *p = *str_ptr;
+   char *p1 = &envi[8];
+   char tmp = '\0';
+   long long val_tmp = 0LL;
+   memset(envi,0,MAX_VAR_LEN + MAX_ENV_LEN + 1);
+   while (*p == ' ') p++;
+   if (p[0] == p[1] && (p[0] == '+' || p[0] == '-'))
+   {
+      if (*p == '+')
+         val_tmp = 1LL;
+      else
+         val_tmp = -1LL;
+      p += 2;
+   }
+
+   if (*p == 0 || *p == '=' || (unsigned char)(*p - '0') < 9)
+      return 0;
+   for (i=0;i<MAX_VAR_LEN;i++)
+   {
+      if ((*p == '=') || (*p < 48)) break;
+      envi[i] = *p++;
+   }
+   
+   p1 = &envi[8];
+   get_env(envi,p1);
+   read_val(&p1,val);
+
+   if (val_tmp != 0LL) //计算++X
+   {
+      *val += val_tmp;
+      val_tmp = *val;
+      sprintf(p1,"%ld\0",val_tmp);
+      set_envi(envi,p1);
+   }
+   else if (p[0] == p[1] && (p[0] == '+' || p[0] == '-')) //计算x++
+   {
+      val_tmp = *val;
+      if (*p == '+')
+         val_tmp++;
+      else
+         val_tmp--;
+      p += 2;
+      sprintf(p1,"%ld\0",val_tmp);
+      set_envi(envi,p1);
+   }
+   *str_ptr = p;
+   return 1;
 }
 
 static unsigned long calc (char *arg)
@@ -806,66 +909,45 @@ static unsigned long calc (char *arg)
    if (debug > 1)
        printf("calc_arg:%s\n",arg);
    #endif
-   char envi[600] = "\0";;
-   unsigned long long val1 = 0;
-   unsigned long long val2 = 0;
+   char var[MAX_VAR_LEN + 1] = "\0";
+   char envi[MAX_VAR_LEN + MAX_ENV_LEN + 1] = "\0";
+   unsigned long long val1 = 0LL;
+   unsigned long long val2 = 0LL;
    unsigned long long *p_result = &val1;
+   unsigned long long var_val = 0LL;
+//   char *p;
    char O;
    
    if (*arg == '*')
    {
-      arg++;
-      if (! safe_parse_maxint_with_suffix (&arg, &val1, 0))
-      {
-	 return 0;
-      }
-      p_result = (unsigned long long *)(int)val1;
+      if ((p_result = (unsigned long long*)read_val(&arg, &val1)) == 0)
+         return 0;
    }
    else
    {
-      if (!read_val(&arg, p_result))
+      if (!read_val(&arg, &val1) && read_envi_val(&arg,envi,&val1) == 0)
       {
-	 int i;
-	 for (i=0;i<MAX_VAR_LEN;i++)
-	 {
-	    if ((*arg == '=') || (*arg < 48)) break;
-	    envi[i] = *arg++;
-	 }
-	 envi[i] = 0;
-	 errnum = 0;
+         return 0;
       }
    }
-   
    while (*arg == ' ') arg++;
-
-   if ((arg[0] == arg[1]) && (arg[0] == '+' || arg[0] == '-'))
-   {
-      if (arg[0] == '+')
-         (*p_result)++;
-      else
-         (*p_result)--;
-      arg += 2;
-      while (*arg == ' ')
-         arg++;
-   }
 
    if (*arg == '=')
    {
       arg++;
-      if (! read_val(&arg, p_result))
+      strcpyn(var,envi,8);
+      if (! read_val(&arg, &val1) && read_envi_val(&arg,envi,&val1) == 0)
 	 return 0;
    }
    else 
    {
       envi[0] = 0;
-      if (p_result != &val1)
-      {
-	 val1 = *p_result;
-	 p_result = &val1;
-      }
+      p_result = &val1;
    }
-   while (*arg)
+   for(;;)
    {
+      while (*arg == ' ') arg++;//过滤空格
+      if (*arg < 37) break;//非法字符
       val2 = 0ULL;
       O = *arg;
       arg++;
@@ -877,53 +959,54 @@ static unsigned long calc (char *arg)
 	 arg++;
       }
       
-      if (! read_val(&arg, &val2))
+      if (read_val(&arg, &val2) == 0 && read_envi_val(&arg,envi,&val2) == 0)
 	 return 0;
 
       switch(O)
       {
 	 case '+':
-		 *p_result += val2;
+		 val1 += val2;
 		 break;
 	 case '-':
-		 *p_result -= val2;
+		 val1 -= val2;
 		 break;
 	 case '*':
-		 *p_result *= val2;
+		 val1 *= val2;
 		 break;
 	 case '/':
-		 *p_result = ((long)*p_result / (long)val2);
+		 val1 = ((long)val1 / (long)val2);
 		 break;
 	 case '%':
-		 *p_result = ((long)*p_result % (long)val2);
+		 val1 = ((long)val1 % (long)val2);
 		 break;
 	 case '&':
-		 *p_result &= val2;
+		 val1 &= val2;
 		 break;
 	 case '|':
-		 *p_result |= val2;
+		 val1 |= val2;
 		 break;
 	 case '^':
-		 *p_result ^= val2;
+		 val1 ^= val2;
 		 break;
 	 case '<':
-		 *p_result <<= val2;
+		 val1 <<= val2;
 		 break;
 	 case '>':
-		 *p_result >>= val2;
+		 val1 >>= val2;
 		 break;
 	 default:
 		 return 0;
       }
    }
-   
+   if (p_result != &val1)
+      *p_result = val1;
    if (debug > 0)
 	  printf(" %ld (HEX:0x%lX)\n",*p_result,*p_result);
    
-   if (envi[0] != 0)
+   if (var[0] != 0)
    {
       sprintf(&envi[8],"%ld\0",*p_result);
-      set_envi(envi,&envi[8]);
+      set_envi(var,&envi[8]);
    }
    errnum = 0;
    return *p_result;
@@ -980,11 +1063,23 @@ static char *lower(char * const string)
  */
 static int grub_memcmp(const char *s1, const char *s2, int n)
 {
+	if( s1 == s2 )
+		return 0;
+	// 基础函数严谨一点比较好
+#ifdef DEBUG
+	if( NULL == s1 || NULL == s2 || n <= 0
+		|| s1 > s2 && (int)(s1-s2) < n
+		|| s1 < s2 && (int)(s2-s1) < n )
+	{
+		printf("grub_memcmp: bad parameter\n");
+		return;
+	}
+#endif
    int len = (n>0) ? n : strlen(s2);
 
    while(len--)
    {
-      if  (*s1 == * s2 || ((unsigned char)(*s1 - 'A') < 26 && *s1 | 32 == *s2))
+      if  (*s1 == * s2 || ((unsigned char)(*s1 - 'A') < 26 && (*s1 | 32) == *s2))
       {
          s1++;
          s2++;
@@ -1007,22 +1102,29 @@ static int grub_memcmp(const char *s1, const char *s2, int n)
 */
 static char *strstrn(const char *s1,const char *s2,const int n)
 {
-   if (n == 0)//n为0直接调用strstr返回第一次出现的指针,注:strstr 如果没有找到时会返回NULL.
+#ifdef DEBUG
+	if( NULL == s1 || NULL == s2 || '\0' == *s1 || '\0' == *s2 )
    {
-      return strstr(s1,s2);
+		printf("strstrn: bad parameters\n");
+		return NULL;
    }
-   else
+#endif
+
+	int len1 = strlen(s1);
+	int len2 = strlen(s2);
+	if( len1 < len2 )
+		return NULL;
+	char *s = strstr(s1,s2);
+	if( 0 == n )
+		return s;
+	const char *p = s1 + len1;
+	do
    {
-      char *p = NULL;
-      char *s;
-      int lens2 = strlen(s2);
-      for (s=strstr(s1,s2);s != NULL;s=strstr(s,s2)) //在s1中查找s2直到最后一个
-      {
-         p = s;
-         s += lens2;
-      }
-      return p;
-   }
+		p -= len2;
+		if(p < s1)
+			p = s1;
+	} while( NULL == (s=(strstr(p, s2))) && p > s1 );
+	return s;
 }
 
 static char* next_line(char *arg)
