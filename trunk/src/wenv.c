@@ -49,6 +49,12 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 
+ 2010-10-08
+   1.修正cal ++VARIABLE没有成功的BUG。
+   2.修正比较符BUG。
+   3.变量提取支持${VARIABLE:X:-Y}的形式，-Y代表提取到-Y个字符(即倒数Y个字符都不要).
+
  2010-10-07
    1.CALC支持自增/自减运算符++/--,和C语言的语法一样
    例子,注意执行的顺序.
@@ -419,7 +425,43 @@ static int wenv_func(char *arg, int flags)
 			replace_str(p1, arg_new, 0);
 			p1 = arg_new;
 		}
-		
+		p2 = p1;
+		while(*p2)
+		{
+			if (*p2 == '\"')
+			{
+				while (*++p2 && *p2 != '\"');
+				if (*p2 == '\"')
+					p2++;
+				else
+					break;
+			}
+			switch(*(unsigned short*)p2)
+			{
+				case 0x3D3D://==
+					op = 0;
+					break;
+				case 0x3E3C://<>
+					op = 1;
+					break;
+				case 0x3D3E://>=
+					op = 2;
+					break;
+				case 0x3D3C://<=
+					op = 3;
+					break;
+				default:
+					p2++;
+					continue;
+			}
+			break;
+		}
+		if (op == -1)
+		{
+			errnum = ERR_BAD_ARGUMENT;
+			return wenv_help_ex(7);
+		}
+		#if 0
 		if( NULL != (p2=strstr(p1,"==") ) )
 			op =0;
 		else if( NULL != (p2=strstr(p1,"<>") ) )
@@ -430,7 +472,7 @@ static int wenv_func(char *arg, int flags)
 			op =3;
 		else
 			return wenv_help_ex(7);
-
+		#endif
 		for (i = 1;*(p2-i) == ' ';i++)	// 滤掉操作符前面的空格
 		{
 			;
@@ -549,7 +591,7 @@ static int replace_str(char *in, char *out, int flags)
             p += 2;
             
             long long start = 0LL;//提取字符起始位置
-            unsigned long long len=-1ULL;//提取字符串长度
+            long long len = 0xFFFFFFFFULL;//提取字符串长度
             int str_flag = 0;
             str_flag = 0;
             memset(ch,0,MAX_VAR_LEN);
@@ -637,16 +679,17 @@ static int replace_str(char *in, char *out, int flags)
 		  else
 		  {
 		     p += len;
-		     len = -1;
+		     len = 0xFFFFFFFF;
 		  }
 	       }
 	       else
 	       {
-		  if (start < 0) start += strlen(value);
+		  int str_len = strlen(value);
+		  if (start < 0LL) start += str_len;//确定起始位置
+		  if (len < 0LL) len += str_len - start;//确定结束位置
 		  p = value + start;
 	       }
-
-               while (*p && len)
+               while (*p && len >0)
                {
 		  *out++ = *p++;
 		  len--;
@@ -799,25 +842,29 @@ static int envi_cmd(const char *var,char *env,int flags)
 
 static int read_val(char **str_ptr,unsigned long long *val)
 {
+      while (**str_ptr == ' ' || **str_ptr == '\t') (*str_ptr)++;
       char *arg = *str_ptr;
       unsigned long long *val_ptr = val;
       char *str_ptr1 = NULL;
-      while (*arg == ' ' || *arg == '\t') arg++;
-
+		char *p = arg;
       if (arg[0] == arg[1] && (arg[0] == '+' || arg[0] == '-'))
       {
          str_ptr1 = arg;
          arg += 2;
       }
-      *str_ptr = arg;
-      if (*arg == '*') arg++;
+
+      if (*arg == '*')
+      {
+			p = arg;
+			arg++;
+		}
       
       if (! safe_parse_maxint_with_suffix (&arg, val, 0))
       {
 	 return 0;
       }
       
-      if (**str_ptr == '*')
+      if (*p == '*')
       {
          val_ptr = (unsigned long long *)(int)*val;
          *val = *val_ptr;
