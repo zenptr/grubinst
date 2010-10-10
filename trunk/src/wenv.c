@@ -49,6 +49,24 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-10-09
+   1.初步添加for命令，目前支持以下两种操作.并且允许嵌套。(仿 CMD 的 for 命令)
+	1). for /L $i IN (start,step,end) DO wenv-command
+	    以增量形式从START到END的一个数字序列。
+	    例子：
+	    wenv for /L $a in (1,1,5) do run echo $a\n
+	    wenv for /L $a in (5,-1,0) do run echo $a\n
+	2). for /F $i IN ( file ) DO wenv-command
+	    读取 FILE 的每一行。忽略以":"开头的行。
+	    注：使用该功能file前后都必需要有空格隔开.
+	    例子:
+	    wenv for /F $a in ( /test.txt ) do run echo $a\n
+	
+   2.read 命令支持参数(类似批处理的参数功能)
+     其中$0 是代表自身. $1-$9 分别是第1个－第9个参数.
+   这样可以配合for等命令实现一些强大的功能..
+   3.修正check命令比较数字的BUG.
+
  2010-10-08
    1.修正cal ++VARIABLE没有成功的BUG。
    2.修正比较符BUG。
@@ -148,12 +166,14 @@ static char* next_line(char *arg);				// 读下一命令行
 static void strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 //子命令集
 static unsigned long calc(char *arg);			// 简单计算器模块, 参数是一个字符串
-static int read_file(char *arg);				// 读外部文件命令集
+static int read_file(char *arg,int flags);				// 读外部文件命令集
 static int set_func(char *arg);
 static int get_func(char *arg);
 static int check_func(const char *arg,int flags);
 static int reset_func(const char *arg);
 static int run_func(char *arg,int flags);
+static int for_func(char *arg, int flags);
+static int replace(char *str ,const char *sub,const char *rep);
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
@@ -182,15 +202,18 @@ static int wenv_func(char *arg, int flags)
    if( ! *arg )
       return wenv_help();
    // 检查默认变量
+   char cmd_buff[MAX_ENV_LEN + 1] = "\0";
    if( 0 != strcmp_ex(VAR[0], "__wenv") )
       reset_env_all();
+   replace_str(arg,cmd_buff,0); //初次替换变量
+   arg = cmd_buff;
 
    if( 0 == strcmp_ex(arg, "read") )
    {
       arg = skip_to(0, arg);
       if(! *arg)
          return wenv_help_ex(5);
-      return read_file(arg);
+      return read_file(arg,flags);
    }
    else if (strcmp_ex(arg, "set") == 0)
    {
@@ -214,21 +237,21 @@ static int wenv_func(char *arg, int flags)
       arg = skip_to(0,arg);
       if(! *arg)
             return wenv_help_ex(6);
-      if (!replace_str(arg,arg_new,1))
+      if (!replace_str(arg,cmd_buff,1))
          return 0;
       #ifdef DEBUG
       if (debug >1)
-      printf("%s\n",arg_new);
+      printf("%s\n",cmd_buff);
       #endif
-      return run_func(arg_new,flags);
+      return run_func(cmd_buff,flags);
    }
    else if (strcmp_ex(arg, "calc") == 0)
    {
       arg = skip_to(0,arg);
       if(! *arg)
          return wenv_help_ex(4);
-      replace_str(arg,arg_new,0);
-      return calc(arg_new);
+      replace_str(arg,cmd_buff,0);
+      return calc(cmd_buff);
    }
    else if (strcmp_ex(arg, "reset") == 0)
    {
@@ -245,6 +268,16 @@ static int wenv_func(char *arg, int flags)
 		return check_func(arg,flags);
 	}
 	return wenv_help_ex(7);
+   }
+   else if (strcmp_ex(arg, "for") == 0)
+   {
+	arg = skip_to(0,arg);
+	if (*arg)
+	{
+		replace_str(arg,cmd_buff,1);
+		return for_func(cmd_buff,flags);
+	}
+	return wenv_help_ex(8);
    }
 	return 0;
 }
@@ -512,7 +545,7 @@ static int check_func(const char *arg,int flags)
 		;
 	}
 	*(p2-i+1) = '\0';//截断
-	i = p2 - p1 - i;
+	//i = p2 - p1 - i;
 	p2++;
 
 	while(*++p2 == ' ')	// 滤掉操作符后面的空格
@@ -525,8 +558,14 @@ static int check_func(const char *arg,int flags)
 	{
 		v1 = 0LL;
 		v2 = grub_memcmp (p2, p1, 0);
+		p2 = skip_to (0, p2);
 	}
-	p1 = skip_to (0, p2);
+	/* 不需要，因为read_val函数就已经过滤掉空格了
+	else
+	{
+		while (*p2 == ' ') p2++;
+	}
+	*/
 	errnum = 0; //清除错误信息
 	switch(op)
 	{
@@ -543,9 +582,141 @@ static int check_func(const char *arg,int flags)
 			i = (v1 <= v2);
 			break;
 	}
-	if (*p1 == '\0' || ! i)
+
+	if (*p2 == '\0' || !i)
 		return i; //如果后面还有参数则继续执行下一个命令
-	return wenv_func (p1,flags);
+	return wenv_func (p2,flags);
+}
+
+static int replace(char *str ,const char *sub,const char *rep)
+{
+	char _buff[MAX_ENV_LEN];
+	char *p_buff = _buff;
+	int istr;
+	int isub;
+	int irep = 0;
+	int i;
+	if (str == NULL || sub == NULL)
+		return 0;
+	istr = strlen(str);
+	isub = strlen(sub);
+	if (isub > istr || istr >= MAX_ENV_LEN)
+		return 0;
+	if (rep != NULL)
+		irep = strlen(rep);
+	strcpy(_buff,str);
+	istr = 0;
+	while (*p_buff)
+	{
+		if (*p_buff == *sub && memcmp(p_buff,sub,isub) == 0)
+		{
+			for (i = 0;i<irep;i++)
+				*str++ = rep[i];
+			p_buff += isub;
+			istr += irep;
+		}
+		else
+		{
+			*str++ = *p_buff++;
+			istr++;
+		}
+		if (istr >= MAX_ENV_LEN)
+			return 0;
+	}
+	*str = '\0';
+	return 1;
+}
+
+static int for_func(char *arg, int flags)
+{
+	char *p;
+	char *cmd;  //指向do 后面的命令的指针
+	char *sub;  //临时变量  $X
+	char *check_sub; //()里面的内容
+	char command_buff[MAX_ENV_LEN]; //命令行缓存
+	char rep[MAX_ENV_LEN];	 //要替换的内容缓存
+	int x = 0;
+	
+	if (strcmp_ex(arg,"/l") == 0) //操作符 /l 数字序列
+		x = 1;
+	else if (strcmp_ex(arg,"/f") == 0) //操作符 /f 读文件
+		x = 2;
+	else return 0;
+	
+	sub = arg = skip_to (0,arg);	//检测临时变量是否正确
+	if (*arg != '$' || arg[2] != ' ')
+			return 0;
+	arg = skip_to (0 , arg);
+	sub[2] = '\0';
+
+	if (strcmp_ex(arg, "in") != 0)	//关键字in
+		return 0;
+	arg = skip_to(0, arg);
+	
+	if (*arg++ != '(')
+		return 0;
+	while (*arg == ' ') arg++;
+	check_sub = arg;
+	while (*arg != ')') arg++;
+
+	arg = skip_to(0, arg);	//关键字do
+	if (strcmp_ex(arg,"do") != 0)
+		return 0;
+	cmd = skip_to(0,arg);	//设置要执行命令开始的指针
+	if (*cmd == '\0') return 0;
+	
+	if (x == 1)
+	{
+		long long start;
+		long long step;
+		long long end;
+		if (read_val(&check_sub,&start) == 0)
+			return 0;
+		while (*check_sub++ != ',');
+		if (read_val(&check_sub,&step) == 0 || step == 0)
+			return 0;
+		while (*check_sub++ != ',');
+		if (read_val(&check_sub,&end) == 0)
+			return 0;
+		for (;(step>0)?start<=end:start>=end; start += step)
+		{
+			replace_str (cmd, command_buff, 1);
+			sprintf(rep,"%ld\0",start);
+			if (replace (command_buff,sub,rep) == 0)
+				return 0;
+			wenv_func (command_buff,flags);
+			if (errnum)
+				break;
+		}
+		return !errnum;
+	}
+	if (x == 2)
+	{
+		char *f_buf = (char*)0x610000;
+		char *p1;
+		while (*arg == ' ') arg++;
+		if (! open(check_sub))
+			return 0;
+		if (read((unsigned long long)(unsigned int)f_buf,0x100000,GRUB_READ) != filemax)
+			return 0;
+		close();
+		f_buf[filemax] = 0;
+		if( *f_buf == ':' )
+			f_buf = next_line(f_buf);
+		while (f_buf != NULL)
+		{
+			p1 = next_line(f_buf);
+			replace_str (cmd, command_buff, 1);
+			replace_str (f_buf, rep, 1);
+			if (replace (command_buff,sub,rep) == 0)
+				return 0;
+			wenv_func (command_buff,flags);
+			if (errnum)
+				break;
+			f_buf = p1;
+		}
+		return !errnum;
+	}
 }
 
 static int wenv_help_ex(int index)
@@ -578,6 +749,10 @@ static int wenv_help_ex(int index)
 			printf("\n WENV <string|VARIABLE|[*]INTEGER> OPERATOR <string|VARIABLE|[*]INTEGER>\n");
 			printf("\tOPERATOR support ==,<>,>=,<=\n");
 			if(index>0) break;
+		case 8: //for
+			printf(" WENV for /L $i IN (start,step,end) DO wenv-command\n");
+			printf(" WENV for /F $i IN ( FILE ) DO wenv-command\n");
+			if(index) break;
 		default:
 			printf("\nFor more information:  http://chenall.net/tag/grub4dos\n");
 			printf("to get source and bin: http://grub4dos-chenall.googlecode.com\n");
@@ -1239,32 +1414,58 @@ static char* next_line(char *arg)
    return 0;
 }
 /*从指定文件中读取WENV的命令序列，并依次执行*/
-static int read_file(char *arg)
+static int read_file(char *arg,int flags)
 {
    if(! open(arg))
       return 0;
-
    if(filemax > 32*1024+512)	// 限制文件大小不能超过32KB+512字节
       return 0;
 
    char *P=(char *)0x600000;	// 6M
    char *P1;
+   char command_buff[MAX_ENV_LEN]; //命令行缓存
 
    if (read((unsigned long long)(unsigned int)P,-1,GRUB_READ) != filemax)
       return 0;
-
+   close();
+   
    P[filemax] = 0;
+   char *s[11] = {NULL};
+   int i,j;
 
-   if( *P == ':' )
-      P1 = next_line(P);
-   else
-      P1 = P;
-
-   while (P = next_line(P1))	// 每次读取一行next_line会把行尾的回车符改成0截断，并返回下一行的起始地址
+   s[0] = arg;
+   for (i=0;i<9;i++)
    {
-      wenv_func(P1, 0);
-      P1 = P;
+      arg = skip_to(0,arg);
+      if (arg == NULL || *arg == 0)
+	 break;
+      for (j=1;*(arg-j) == ' ';j++) //截断
+	 ;
+      *(arg-j+1) = '\0';
+
+      s[i+1] = arg;
    }
 
-   return wenv_func(P1, 0);
+   if( *P == ':' )
+       P = next_line(P);
+
+   int ret;
+   char sub[3] = "$0\0";
+   while (P != NULL)
+   {
+      P1 = next_line(P);
+      strcpy(command_buff,P);
+      for (i=0;i<10;i++)
+      {
+	 sub[1] = i+48;
+	 if (replace (command_buff,sub,s[i]) == 0)
+	    return 0;
+      }
+      ret = wenv_func (command_buff,flags);
+      if (errnum)
+	 break;
+      P = P1;
+   }
+
+   return ret;
 }
