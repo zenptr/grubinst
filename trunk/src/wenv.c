@@ -108,10 +108,10 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
       1).${VAR:x:y}  从x开始提取y个字符,如果x为负数则从倒数x个开始提取.
 
       以下提取的内容都不包含STRING字符串.
-      2).${VAR#STRING}	提取STRING字符串后面的内容,从左往右第一个位置开始.
-      3).${VAR##STRING} 提取STRING字符串后面的内容,从右往左第一个位置开始.
-      4).${VAR%STRING}	提取STRING字符串前面的内容,从右往左第一个位置开始.
-      5).${VAR%%STRING}	提取STRING字符串前面的内容,从左往右第一个位置开始.
+      2).${VAR#STRING}	删除STRING前面的字符。
+      3).${VAR##STRING} 删除STRING前面的字符，贪婪模式。
+      4).${VAR%STRING}	删除STRING后面的字符。
+      5).${VAR%%STRING}	删除STRING后面的字符，贪婪模式。
  2010-10-04
    1.函数调整.
  2010-09-30
@@ -172,7 +172,7 @@ static int ascii_unicode(const char *ch, char *addr);	// unicode编码转换
 
 static char *lower(char * const string);			// 小写转换
 static char *upper(char * const string);			// 大写转换
-static char* next_line(char *arg);				// 读下一命令行
+static char* next_line(char *arg, char eol);				// 读下一命令行
 static void strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 static int printfn(char *str,int n);				//最多显示n个字符
 //子命令集
@@ -236,10 +236,10 @@ int main()
 		1,
 		"check",
 		check_func,
-		1 | 0x100,
+		1,
 		"for",
 		for_func,
-		1 | 0x1000,
+		1,
 		NULL,
 		NULL,
 		0
@@ -256,7 +256,7 @@ static int wenv_func(char *arg, int flags)
       return wenv_help();
 
    int i;
-   int ret;
+   int ret = 0;
    if( 0 != strcmp_ex(VAR[0], "__wenv") )// 检查默认变量
       reset_env_all();
    
@@ -322,8 +322,6 @@ static int wenv_func(char *arg, int flags)
 			if(! *arg && *arg < (char)p_cmd_list[i].flags)
 				return wenv_help_ex(i+1);
 			ret = p_cmd_list[i].func(arg,flags);
-			if (p_cmd_list[i].flags & 0x100)
-				return ret;
 			break;
 		}
 	}
@@ -331,7 +329,7 @@ static int wenv_func(char *arg, int flags)
 		break;
 	arg = p;
 	}
-   return 0;
+   return ret;
 }
 
 static int set_func(char *arg,int flags)
@@ -694,35 +692,107 @@ static int for_func(char *arg, int flags)
 	char *check_sub; //()里面的内容
 	char command_buff[MAX_ENV_LEN+1] = "\0"; //命令行缓存
 	char rep[MAX_ENV_LEN];	 //要替换的内容缓存
-	int x = 0;
-	
+	int x = 0;		//模式
+	int ret = 0;		//命令返回值
+	char delims[8] = {' ','\t'};//默认分融符
+	char eol = ':';
+	int tokens = 1;
 	if (strcmp_ex(arg,"/l") == 0) //操作符 /l 数字序列
 		x = 1;
 	else if (strcmp_ex(arg,"/f") == 0) //操作符 /f 读文件
 		x = 2;
 	else return 0;
 	
-	sub = arg = skip_to (0,arg);	//检测临时变量是否正确
-	if (*arg != '$' || arg[2] != ' ')
-			return 0;
+	arg = skip_to (0,arg);
+
+	if ((x & 2) && *arg == '\"')	//字符串分隔，设定提取参数
+	{
+		int i;
+		arg++;
+		while (*arg)
+		{
+			if (*arg == ' ')
+				arg++;
+			else if (*arg == '\"')
+				break;
+			else if (memcmp(arg,"tokens=",7) == 0)
+			{
+				unsigned char t;
+				char *tp;
+				arg += 7;
+				tokens = 0;
+				for(i=0;i<9;i++)
+				{
+					t = *arg++;
+					t -= '1';
+					if (t > 8)
+						return 0;
+					tokens |= 1 << t;
+					if (*arg == ',')
+						arg++;
+					else
+						break;
+				}
+				if (tokens == 0)
+				{
+					printf("1");
+					return !(errnum = ERR_BAD_ARGUMENT);
+				}
+			}
+			else if (memcmp(arg,"delims=",7) == 0)
+			{
+				arg += 7;
+				delims[0] = '\0';//删除默认分隔符
+				delims[1] = '\0';
+				for(i=0;i<7 && *arg;i++)
+				{
+					if (*arg == '\"' || *arg == ' ')
+						break;
+					delims[i] = *arg++;
+				}
+			}
+			else if (memcmp(arg,"eol=",4) == 0)
+			{
+				arg +=4;
+				if (*arg == ' ' || *arg == '\"')
+					eol = '\0';
+				else
+					eol = *arg++;
+			}
+			else
+			{
+				return !(errnum = ERR_BAD_ARGUMENT);
+			}
+		}
+		
+		if (*arg++ != '\"')
+			return !(errnum = ERR_BAD_ARGUMENT);
+		#ifdef DEBUG
+		if (debug >1)
+			printf("delims:%s :: eol=%c :: tokens:%x\n",delims,eol,tokens);
+		#endif
+		arg = skip_to (0,arg);
+	}
+	if (*arg != '%' || arg[2] != ' ')
+		return !(errnum = ERR_BAD_ARGUMENT);
+	sub = arg;	//检测临时变量是否正确
 	arg = skip_to (0 , arg);
 	sub[2] = '\0';
-
 	if (strcmp_ex(arg, "in") != 0)	//关键字in
-		return 0;
+		return !(errnum = ERR_BAD_ARGUMENT);
+
 	arg = skip_to(0, arg);
-	
 	if (*arg++ != '(')
-		return 0;
+		return !(errnum = ERR_BAD_ARGUMENT);
 	while (*arg == ' ') arg++;
 	check_sub = arg;
 	while (*arg != ')') arg++;
 
 	arg = skip_to(0, arg);	//关键字do
 	if (strcmp_ex(arg,"do") != 0)
-		return 0;
+		return !(errnum = ERR_BAD_ARGUMENT);
 	cmd = skip_to(0,arg);	//设置要执行命令开始的指针
-	if (*cmd == '\0') return 0;
+	if (*cmd == '\0') return !(errnum = ERR_BAD_ARGUMENT);
 	
 	if (x == 1)
 	{
@@ -743,16 +813,16 @@ static int for_func(char *arg, int flags)
 			sprintf(rep,"%ld\0",start);
 			if (replace (command_buff,sub,rep) == 0)
 				return 0;
-			return wenv_func(arg,flags);
+			ret = wenv_func(command_buff ,flags);
 			if (errnum)
-				break;
+				return !errnum;
 		}
-		return !errnum;
 	}
-	if (x == 2)
+	 else	if (x == 2)
 	{
 		char *f_buf = (char*)0x610000;
 		char *p1;
+		int j;
 		while (*arg == ' ') arg++;
 		if (! open(check_sub))
 			return 0;
@@ -760,22 +830,21 @@ static int for_func(char *arg, int flags)
 			return 0;
 		close();
 		f_buf[filemax] = 0;
-		if( *f_buf == ':' )
-			f_buf = next_line(f_buf);
-		while (f_buf != NULL)
+		if( *f_buf == eol )
+			f_buf = next_line(f_buf,eol);
+		while (*f_buf)
 		{
-			p1 = next_line(f_buf);
+			p1 = next_line(f_buf, eol);
 			strcpyn(command_buff,cmd,MAX_ENV_LEN);
-			replace_str (f_buf, rep, 1);
-			if (replace (command_buff,sub,rep) == 0)
+			if (replace (command_buff,sub,f_buf) == 0)
 				return 0;
-			return wenv_func(arg,flags);
+			ret = wenv_func(command_buff ,flags);
 			if (errnum)
-				break;
+				return !errnum;
 			f_buf = p1;
 		}
-		return !errnum;
 	}
+	return ret;
 }
 
 static int wenv_help_ex(int index)
@@ -825,7 +894,7 @@ static int replace_str(char *in, char *out, int flags)
    {
       memset(out, 0, MAX_ARG_LEN);
    }
-   if (flags) while (*in == ' ') in++;
+   if (flags) while (*in == ' ') in++;//忽略前面的空格
    char *po = out;
    char *p = in;
    int i;
@@ -999,7 +1068,10 @@ static int replace_str(char *in, char *out, int flags)
    }
    if (flags)
    {
-	while(*--out == ' ');
+	while(*--out == ' ') //删除后面的空格
+	{
+		;
+	}
 	out++;
    }
    *out = '\0'; //截断
@@ -1025,6 +1097,7 @@ static void strcpyn(char *dest,const char *src,int n)
    {
       *dest++ = *src++;
    }
+   *dest = '\0';
 }
 
 static int envi_cmd(const char *var,char * const env,int flags)
@@ -1500,28 +1573,26 @@ static int printfn(char *str,int n)
    return i;
 }
 
-static char* next_line(char *arg)
+static char* next_line(char *arg, char eol)
 {
    char *P=arg;
 
-   while(*P++)
+   while(*P && *P != '\r' && *P != '\n')
+      P++;
+   if (*P == '\0')
+      return P;
+   else
+      *P = 0;
+   while(*++P)
    {
-      if(*P == '\r' || *P == '\n')
-      {
-         *P++ = 0;
-         while(*P == '\n' || *P == '\r' || *P == ' ' || *P == '\t')
-            P++;
-
-         if(*P == ':')
-            continue;
-
-         if(*P)
-            return P;
-
-         break;
-      }
+      if (*P == '\n' || *P == '\r' || *P == ' ' || *P == '\t')
+	 continue;
+      else
+	 break;
    }
-   return 0;
+   if (*P == eol)
+      return next_line(P,eol);
+   return P;
 }
 /*从指定文件中读取WENV的命令序列，并依次执行*/
 static int read_func(char *arg,int flags)
@@ -1557,13 +1628,13 @@ static int read_func(char *arg,int flags)
    }
 
    if( *P == ':' )
-       P = next_line(P);
+       P = next_line(P,':');
 
    int ret;
    char sub[3] = "$0\0";
-   while (P != NULL)
+   while (*P)
    {
-      P1 = next_line(P);
+      P1 = next_line(P,':');
       strcpy(command_buff,P);
       for (i=0;i<10;i++)
       {
