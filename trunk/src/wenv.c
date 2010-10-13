@@ -49,6 +49,9 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-10-13
+	1.尝试添加变量嵌套支持。
+
  2010-10-12
 	1.添加简单的echo子命令。
 	2.添加call子命令(就是run命令)
@@ -72,7 +75,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	  例:wenv (set a=1 ; set c=2 ; set b=3).可以配合for命令使用.允许嵌套;
 	4.set 命令也可以显示变量(按cmd的set命令使用习惯).如果后面没有=，则显示所有以输入的字符开头的变量.
 	5.修改*的定义。(比较方便处理)
-	  $*ADDR从内存地址中取字符串。*ADDR取一个数值。
+	  *ADDR$ 从内存地址中取字符串。*ADDR取一个数值。
 	6.$$反义一个$(像批处理的%%),即两个$$处理时第一次会变成一个$,方便在for里面使用变量.
 
  2010-10-09
@@ -192,7 +195,7 @@ static int ascii_unicode(const char *ch, char *addr);	// unicode编码转换
 static char *lower(char * const string);			// 小写转换
 static char *upper(char * const string);			// 大写转换
 static char* next_line(char *arg, char eol);				// 读下一命令行
-static void strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
+static int strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 static int printfn(char *str,int n);				//最多显示n个字符
 //子命令集
 
@@ -296,7 +299,7 @@ static int wenv_func(char *arg, int flags)
 			*arg = ' ';
 			p1 = arg;
 			i = 1;
-			while(*++p1 && i)
+			while(i && *++p1)
 			{
 				if (*p1 == '(')
 					i++;
@@ -318,7 +321,7 @@ static int wenv_func(char *arg, int flags)
 			if (*p == '(')
 			{
 				i = 1;
-				while (*++p && i)
+				while (i && *++p)
 				{
 					if (*p == '(')
 						i++;
@@ -1008,6 +1011,155 @@ static int wenv_help_ex(enum ENUM_CMD cmd)
 	return 0;
 }
 
+static int var_expand(char **arg, char **out)
+{
+	if (**arg != '{' || arg == NULL)
+		return 0;
+	char ch[MAX_VAR_LEN + 1] = {0};
+	char value[MAX_ENV_LEN + 1] = {0};
+	char *p = *arg;
+	int i;
+	long long start = 0LL;//提取字符起始位置
+	long long len = 0xFFFFFFFFULL;//提取字符串长度
+	int str_flag = 0;
+	p++;
+	for (i=0;i<MAX_VAR_LEN+1;i++)
+	{
+		if (*p == '}') //提取变量成功.
+		{
+			break;
+		}
+		else if (*p == ':') //截取指定长度字符串关键字符
+		{
+			p++;
+			if (! safe_parse_maxint (&p, &start)) //起始位置
+			{
+				break;//不符合要求,则不处理.如果后面刚好是一个"}"则相当于过滤掉了":"
+			}
+			if (*p == ':' && (p++,! safe_parse_maxint (&p, &len)))//长度,非必要的
+			{
+				break;//同上
+			}
+			break;//不再判断,直接退出.
+		}
+		else if (*p == '#')
+		{
+			if (*++p == '#')
+			{
+				p++;
+				str_flag = 3;
+			}
+			else
+				str_flag = 2;
+
+			//if (*p == '*') p++;
+			start = (long long)(int)p;//设定起始位置(保存的是一个指针数值)
+			len = 0;//字符串长度,后面需要跳过这些字符.
+			while (*p && *p != '}')//跳过后面的字符
+			{
+				len++;
+				p++;
+			}
+			break;
+		}
+		else if (*p == '%')
+		{
+			if (*++p == '%')
+			{
+				str_flag = 4;
+				p++;
+			}
+			else
+				str_flag = 5;
+
+			start = (long long)(int)p;//设定起始位置(保存的是一个指针数值);
+			while (*p && *p != '}') p++;//跳过后面的字符
+			//if (*(p-1) == '*') *(p-1) = '\0'; //截断
+			break;
+		}
+		else if (*p < '0' || i >= MAX_VAR_LEN) //非法字符或变量超过8个字符
+		{
+			break;
+		}
+		ch[i] = *p++;
+	}
+
+	errnum = 0;
+	if (*p != '}')
+	{
+		if (*p == '$' && p[1] == '{')
+		{
+			char *p1 = value;
+			i = p - *arg;
+			strcpyn(p1,*arg,i);
+			p1 += i;
+			p++;
+			if (var_expand(&p, &p1))
+			{
+				i = 1;
+				while (i && *++p)
+				{
+					if (*p == '{')
+						i++;
+					if (*p == '}')
+						i--;
+					*p1++ = *p;
+				}
+
+				*arg = p;
+				p1 = value;
+				return var_expand(&p1,out);
+			}
+		}
+		return 0;
+	}
+
+	*arg = p;
+
+	if (get_env(ch,value))
+	{
+		if (str_flag)
+		{
+			**arg = '\0';
+			p = strstrn(value, (char *)(int)start, str_flag & 1);
+			**arg = '}';
+			if (p == NULL)
+				return 1;
+			if (str_flag & 4)
+			{
+				len = p - value;
+				p = value;
+			}
+			else
+			{
+				p += len;
+				len = 0xFFFFFFFF;
+			}
+		}
+		else
+		{
+			int str_len = strlen(value);
+			if (start < 0LL) start += str_len;//确定起始位置
+			if (len < 0LL) len += str_len - start;//确定结束位置
+			p = value + start;
+		}
+		#ifdef DEBUG
+		if (debug > 1)
+			printf("%s\n",p);
+		#endif
+		while (*p && len >0)
+		{
+			*(*out)++ = *p++;
+			len--;
+		}
+	}
+	#ifdef DEBUG
+	if (debug > 1)
+	printf("%s = %s\n",ch,value);
+	#endif
+	return 1;
+}
+
 static int replace_str(char *in, char *out, int flags)
 {
 	if (out == arg_new)
@@ -1025,52 +1177,31 @@ static int replace_str(char *in, char *out, int flags)
 	{
 		switch(*(p = in))
 		{
-			#if 0
-			case '*':/*当flags为真时 替换命令参数为内存地址指向的字符串*/
-				if (! flags)
-				{
-					*out++ = *in++;
-					continue;
-				}
+			case '*':
 				p++;
-				if (! safe_parse_maxint (&p, &addr))
+				if (! safe_parse_maxint (&p, &addr) || *p != '$')
 				{
 					errnum = 0;
 					*out++ = *in++;
 					continue;
 				}
-				in = p;
+				in = ++p;
 				p = (char *)(unsigned long)addr;
 				while (*p && *p != '\r' && *p != '\n') *out++ = *p++;
 				break;
-			#endif
 			case '$':/*替换变量,如果这个变量不符合不替换保持原来的字符串*/
-				
-				if (p[1] != '{')
+				p++;
+				if (*p == '$') //两个$$只留下一个
 				{
-					if (p[1] != '*')
-					{
-						*out++ = *in++;
-						if (p[1] == '$') //两个$$只留下一个
-			in++;
-						continue;
-					}
-					p += 2;
-					if (! safe_parse_maxint (&p, &addr))
-					{
-						errnum = 0;
-						*out++ = *in++;
-						continue;
-					}
-					in = p;
-					p = (char *)(unsigned long)addr;
-					while (*p && *p != '\r' && *p != '\n')
-					{
-						*out++ = *p++;
-					}
-					break;//break switch
+					in++;
+					*out++ = *in++;
+					continue;
 				}
-				
+				if (var_expand(&p,&out))
+					in = ++p;
+				else
+					*out++ = *in++;
+				#if 0
 				p += 2;
 				
 				long long start = 0LL;//提取字符起始位置
@@ -1085,56 +1216,56 @@ static int replace_str(char *in, char *out, int flags)
 						break;
 					}
 					else if (*p == ':') //截取指定长度字符串关键字符
-			 {
-		  p++;
-		  if (! safe_parse_maxint (&p, &start)) //起始位置
-		  {
-			  break;//不符合要求,则不处理.如果后面刚好是一个"}"则相当于过滤掉了":"
-		  }
-		  if (*p == ':' && (p++,! safe_parse_maxint (&p, &len)))//长度,非必要的
-		  {
-			  break;//同上
-		  }
-		  break;//不再判断,直接退出.
-			 }
-			 else if (*p == '#')
-			 {
-		  if (*++p == '#')
-		  {
-			  p++;
-			  str_flag = 3;
-		  }
-		  else
-			  str_flag = 2;
+					{
+						p++;
+						if (! safe_parse_maxint (&p, &start)) //起始位置
+						{
+							break;//不符合要求,则不处理.如果后面刚好是一个"}"则相当于过滤掉了":"
+						}
+						if (*p == ':' && (p++,! safe_parse_maxint (&p, &len)))//长度,非必要的
+						{
+							break;//同上
+						}
+						break;//不再判断,直接退出.
+					}
+					else if (*p == '#')
+					{
+						if (*++p == '#')
+						{
+							p++;
+							str_flag = 3;
+						}
+						else
+							str_flag = 2;
 
-		  //if (*p == '*') p++;
-		  start = (long long)(int)p;//设定起始位置(保存的是一个指针数值)
-		  len = 0;//字符串长度,后面需要跳过这些字符.
-		  while (*p && *p != '}')//跳过后面的字符
-		  {
-			  len++;
-			  p++;
-		  }
-		  break;
-			 }
-			 else if (*p == '%')
-			 {
-				  if (*++p == '%')
-				  {
-			  str_flag = 4;
-			  p++;
-		  }
-		  else
-			  str_flag = 5;
+						//if (*p == '*') p++;
+						start = (long long)(int)p;//设定起始位置(保存的是一个指针数值)
+						len = 0;//字符串长度,后面需要跳过这些字符.
+						while (*p && *p != '}')//跳过后面的字符
+						{
+							len++;
+							p++;
+						}
+						break;
+					}
+					else if (*p == '%')
+					{
+						if (*++p == '%')
+						{
+							str_flag = 4;
+							p++;
+						}
+						else
+							str_flag = 5;
 
-		  start = (long long)(int)p;//设定起始位置(保存的是一个指针数值);
-		  while (*p && *p != '}') p++;//跳过后面的字符
-		  //if (*(p-1) == '*') *(p-1) = '\0'; //截断
-		  break;
-			 }
+						start = (long long)(int)p;//设定起始位置(保存的是一个指针数值);
+						while (*p && *p != '}') p++;//跳过后面的字符
+						//if (*(p-1) == '*') *(p-1) = '\0'; //截断
+						break;
+					}
 					else if (*p < '0' || i >= MAX_VAR_LEN) //非法字符或变量超过8个字符
 					{
-		  break;
+						break;
 					}
 					ch[i] = *p++;
 				}
@@ -1144,41 +1275,42 @@ static int replace_str(char *in, char *out, int flags)
 					*out++ = *in++;
 					continue;
 				}
-		 *p = '\0'; //截断
+				*p = '\0'; //截断
 				in = ++p;
 				
 				memset(value,0,MAX_ENV_LEN+1);
 				if (get_env(ch,value))
 				{
-			 if (str_flag)
-			 {
-		  if (! (p = strstrn(value, (char *)(int)start, str_flag & 1)))
-			  continue;
-		  if (str_flag & 4)
-		  {
-			  len = p - value;
-			  p = value;
-		  }
-		  else
-		  {
-			  p += len;
-			  len = 0xFFFFFFFF;
-		  }
-			 }
-			 else
-			 {
-		  int str_len = strlen(value);
-		  if (start < 0LL) start += str_len;//确定起始位置
-		  if (len < 0LL) len += str_len - start;//确定结束位置
-		  p = value + start;
-			 }
+					if (str_flag)
+					{
+						if (! (p = strstrn(value, (char *)(int)start, str_flag & 1)))
+							continue;
+						if (str_flag & 4)
+						{
+							len = p - value;
+							p = value;
+						}
+						else
+						{
+							p += len;
+							len = 0xFFFFFFFF;
+						}
+					}
+					else
+					{
+						int str_len = strlen(value);
+						if (start < 0LL) start += str_len;//确定起始位置
+						if (len < 0LL) len += str_len - start;//确定结束位置
+						p = value + start;
+					}
+
 					while (*p && len >0)
 					{
-		  *out++ = *p++;
-		  len--;
-			 }
+						*out++ = *p++;
+						len--;
+					}
 				}
-				
+				#endif
 				break;
 
 			default:/* 默认不替换直接复制字符*/
@@ -1188,11 +1320,11 @@ static int replace_str(char *in, char *out, int flags)
 	}
 	if (flags)
 	{
-	while(*--out == ' ') //删除后面的空格
-	{
-		;
-	}
-	out++;
+		while(*--out == ' ') //删除后面的空格
+		{
+			;
+		}
+		out++;
 	}
 	*out = '\0'; //截断
 	#ifdef DEBUG
@@ -1202,7 +1334,7 @@ static int replace_str(char *in, char *out, int flags)
 	return *po;
 }
 
-static void strcpyn(char *dest,const char *src,int n)
+static int strcpyn(char *dest,const char *src,int n)
 {
 #ifdef DEBUG
 	if( NULL == dest || NULL == src || n <= 0
@@ -1213,11 +1345,13 @@ static void strcpyn(char *dest,const char *src,int n)
 		return;
 	}
 #endif
+	const char *p = src;
 	while(*src && n--)
 	{
 		*dest++ = *src++;
 	}
 	*dest = '\0';
+	return (int)(src=p);
 }
 
 static int envi_cmd(const char *var,char * const env,int flags)
@@ -1317,7 +1451,7 @@ static int envi_cmd(const char *var,char * const env,int flags)
 	{//有找到匹配的变量时正常返回,否则返回0
 		if (j == i)
 		{
-			memmove(env,ENVI[i],MAX_ENV_LEN);
+			strcpyn(env,ENVI[i],MAX_ENV_LEN);
 			return *env;//返回得到的值的第一个字符(如果该变量的值为空则就是返回0);
 		}
 		return 0;
@@ -1343,10 +1477,10 @@ static int envi_cmd(const char *var,char * const env,int flags)
 	if (j != i) //添加新的变量
 	{
 		i = (j<i?j:i);//优先使用已删除的空间.
-		memmove(VAR[i] ,ch ,MAX_VAR_LEN);//添加变量名
+		strcpyn(VAR[i] ,ch ,MAX_VAR_LEN);//添加变量名
 	}
 	//添加或修改
-	memmove(ENVI[i],env,MAX_ENV_LEN);
+	strcpyn(ENVI[i],env,MAX_ENV_LEN);
 	return 1;
 }
 
