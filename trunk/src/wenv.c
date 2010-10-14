@@ -46,7 +46,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	set/calc/run/read命令无参数时，显示相应命令语法
  */
 /*
- * to get this source code & binary: http://grub4dos-chenall.google.com
+ * to get this source code & binary: http://grubutils.googlecode.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
  2010-10-13
@@ -192,14 +192,13 @@ static int read_val(char **str_ptr,unsigned long long *val);	// 读取一个数�
 
 static int ascii_unicode(const char *ch, char *addr);	// unicode编码转换
 
-static char *lower(char * const string);			// 小写转换
-static char *upper(char * const string);			// 大写转换
+static void lower(char *string);			// 小写转换
+static void upper(char *string);			// 大写转换
 static char* next_line(char *arg, char eol);				// 读下一命令行
 static int strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 static int printfn(char *str,int n);				//最多显示n个字符
+
 //子命令集
-
-
 static int set_func(char *arg,int flags);
 static int get_func(char *arg,int flags);
 static int reset_func(char *arg,int flags);
@@ -363,14 +362,17 @@ static int set_func(char *arg,int flags)
 	char var[MAX_VAR_LEN+1] = "\0";
 	char value[MAX_ENV_LEN + 1] = "\0";
 	
-	for(i=0; i<MAX_VAR_LEN && arg[i]; ++i)
+	for(i=0; i<MAX_VAR_LEN && *arg; ++i)
 	{
-		if( arg[i] == '=' || (arg[i] < '0') ) //无效变量名
+		if( *arg == '=' 
+		  || *arg < '0'
+		  || (*arg > '9' && *arg != '_' && (unsigned char)((*arg | 0x20) - 'a') > 25)) //无效变量名
 			break;
-		if (! (arg[i] == '_'
-			|| (arg[i] >= '0' && arg[i] <= '9')
-			|| (arg[i] >= 'a' && arg[i] <= 'z')
-			|| (arg[i] >= 'A' && arg[i] <= 'Z'))) //变量名只能使用字母,数字或下划线组成.
+		#if 0
+		if (! (*arg == '_'
+			|| (*arg >= '0' && *arg <= '9')
+			|| (*arg >= 'a' && *arg <= 'z')
+			|| (*arg >= 'A' && *arg <= 'Z'))) //变量名只能使用字母,数字或下划线组成.
 		{
 			if( debug > 0 )
 			{
@@ -379,20 +381,21 @@ static int set_func(char *arg,int flags)
 			}
 			return 0;
 		}
-		var[i] = arg[i];
+		#endif
+		var[i] = *arg++;
 	}
 
-	while(arg[i] == ' ') i++;//去掉空格
+	while(*arg == ' ') arg++;//过滤空格
 
-	if (arg[i] != '=') //变量后面不是'='非法,显示帮助信息并退出
+	if (*arg == '\0') //后面没有"="
 	{
-		//return wenv_help_ex(1);
-		if (envi_cmd(var,NULL,2) == 0)
-		  return wenv_help_ex(1); //显示包含的变量
-		else
-		  return 1;
+		return envi_cmd(var,NULL,2);
 	}
-	
+
+	if (*arg != '=')//变量后面不是'='
+	{
+		return wenv_help_ex(1);
+	}
 
 	arg = skip_to(1, arg);
 	if(! *arg)
@@ -533,16 +536,19 @@ static int call_func(char *arg,int flags)
 
 static int reset_func(char *arg,int flags)
 {
-	int i;
+	if (*arg == '\0') return reset_env_all();
+	int i = -1;
+	#if 0
 	char t_var[MAX_VAR_LEN+1] = "\0";
 	for(i=0; i<MAX_VAR_LEN; ++i)
 	{
-		if (arg[i] < 48)
+		if (*arg < '0')
 			break;
-		t_var[i] = arg[i];
+		t_var[i] = *arg++;
 	}
-
-	if (MAX_VAR_LEN==i && arg[i] != ' ' && arg[i] != 0)//输入的变量名超过8个退出.
+	#endif
+	i += strlen(arg);
+	if (i >= MAX_VAR_LEN)//输入的变量名超过8个退出.
 	{
 		if(debug>0)
 			printf(" VARIABLE illegally\n\n");
@@ -552,11 +558,11 @@ static int reset_func(char *arg,int flags)
 	if (arg[i] == '*') //按前缀清除
 	{
 		int j, count=0;
-		for(j=1; i < MAX_USER_VARS && VAR[j][0] != '\0'; j++)
+		for(j=0; j < MAX_USER_VARS && VAR[j][0] != '\0'; j++)
 		{
 			if (VAR[j][0] == '@') //已经删除的
 				continue;
-			if (memcmp(VAR[j], t_var, i) == 0)//匹配成功作删除标记
+			if (memcmp(VAR[j], arg , i) == 0)//匹配成功作删除标记
 			{
 				VAR[j][0] = '@';
 				++count;
@@ -566,18 +572,18 @@ static int reset_func(char *arg,int flags)
 	}
 	else
 	{
-		return set_envi(t_var, NULL);
+		return set_envi(arg, NULL);
 	}
 }
 
 static int check_func(char *arg,int flags)
 {
-	char arg_tmp[MAX_ARG_LEN + 1];
+	//char arg_tmp[MAX_ARG_LEN + 1];
 	unsigned int op=-1; // 0:==, 1:<>, 2:>=, 3:<=, 判断优先级从小到大
 	int i;
 	char *p1,*p2;
-	replace_str(arg, arg_tmp, 1);//二次替换
-	p1 = arg_tmp;
+	//replace_str(arg, arg_tmp, 1);//二次替换
+	p1 = arg;
 
 	p2 = p1;
 	while(*p2)
@@ -589,6 +595,10 @@ static int check_func(char *arg,int flags)
 				p2++;
 			else
 				break;
+		}
+		if (*p2 == ' ') //碰到空格就截断。要比较空格必须放在""里面
+		{
+			*p2++ = '\0';
 		}
 		switch(*(unsigned short*)p2)
 		{
@@ -608,6 +618,7 @@ static int check_func(char *arg,int flags)
 				p2++;
 				continue;
 		}
+		*p2++ = '\0'; //有找到比较操作符了，直接截断。
 		break;
 	}
 	if (op == -1)
@@ -615,6 +626,7 @@ static int check_func(char *arg,int flags)
 		errnum = ERR_BAD_ARGUMENT;
 		return wenv_help_ex(7);
 	}
+	/*
 	for (i = 1;*(p2-i) == ' ';i++)	// 滤掉操作符前面的空格
 	{
 		;
@@ -622,12 +634,14 @@ static int check_func(char *arg,int flags)
 	*(p2-i+1) = '\0';//截断
 	//i = p2 - p1 - i;
 	p2++;
-
+	*/
 	while(*++p2 == ' ')	// 滤掉操作符后面的空格
 	{
 		;
 	}
-	
+	#ifdef DEBUG
+		printf("%s <==> %s\n",p1,p2);
+	#endif
 	long long v1 = 0LL,v2=0LL;
 	if ( !read_val(&p1,&v1) || !read_val(&p2,&v2) ) // 读数字失败就按字符串比较
 	{
@@ -658,8 +672,8 @@ static int check_func(char *arg,int flags)
 			break;
 	}
 
-	if (*p2 == '\0' || !i)
-		return i; //如果后面还有参数则继续执行下一个命令
+	if (*p2 == '\0' || !i) //如果后面没有参数或者返回真为假，直接返回。
+		return i;
 	return wenv_func(p2,flags);
 }
 
@@ -684,9 +698,11 @@ static int replace(char *str ,const char *sub,const char *rep)
 	while (*p_buff)
 	{
 		if (*p_buff == *sub && memcmp(p_buff,sub,isub) == 0)
-		{
+		{/*
 			for (i = 0;i<irep;i++)
-				*str++ = rep[i];
+				*str++ = rep[i];*/
+			strcpyn(str,rep,irep);
+			str += irep;
 			p_buff += isub;
 			istr += irep;
 		}
@@ -700,6 +716,22 @@ static int replace(char *str ,const char *sub,const char *rep)
 	}
 	*str = '\0';
 	return 1;
+}
+
+//删除字符串前后的空格和引号
+static void trim_p(char **p_str)
+{
+	char *p=*p_str;
+	while (**p_str == ' ')
+		*(*p_str)++;
+	if (**p_str == '\"') *(*p_str)++;
+	p = *p_str;
+	while (*p) p++;
+
+	while (*--p == ' ');
+	if (*p == '\"') p--;
+	p[1] = '\0';
+	return;
 }
 
 static int split_ex(char *str,char *delims,char **result,int tokens)
@@ -724,6 +756,7 @@ static int split_ex(char *str,char *delims,char **result,int tokens)
 		}
 		p++;
 	}
+
 	if (tokens & 1) //设置第一个变量
 	{
 		*result++ = s++;
@@ -939,12 +972,14 @@ static int for_func(char *arg, int flags)
 			p1 = next_line(f_buf, eol[0]);
 			strcpyn(command_buff,cmd,MAX_ENV_LEN); //复制命令到缓冲区，因为要对命令进行字符串替换
 			split_ex(f_buf,delims,s,tokens);//分隔字符串.
-			
 
 			for (i = 0;s[i];i++)
 			{
+				#ifdef DEBUG
 				if (debug > 1)
 					printf("debug:%d:%s\n",i,s[i]);
+				#endif
+				trim_p(&s[i]);
 				if (replace (command_buff,t_sub,s[i]) == 0)
 					return 0;
 				t_sub[1]++;//下一个临时变量字符
@@ -962,8 +997,15 @@ static int for_func(char *arg, int flags)
 static int echo_func(char *arg, int flags)
 {
 	int i=parse_string(arg); //格式化字符串
-	arg[i] = 0;
+	#if 1
+	printfn(arg,i);
+	putchar('\n');
+	return 1;
+	#else
+	if (arg[i] != 0) arg[i] = 0;
 	return printf("%s\n",arg);
+	#endif
+//	return 1;
 }
 
 static int wenv_help_ex(enum ENUM_CMD cmd)
@@ -971,7 +1013,7 @@ static int wenv_help_ex(enum ENUM_CMD cmd)
 	switch(cmd)
 	{//set get reset calc read run check for
 		case CMD_HELP:  // information
-			printf(" WENV Using variables in GRUB4DOS, Compiled time: %s %s\n", __DATE__, __TIME__);
+			printf(" Using variables in GRUB4DOS, Compiled time: %s %s\n", __DATE__, __TIME__);
 		case VAR_TIP:
 			printf("\tVARIABLE is made of characters \"_/A-Z/a-z/0-9\"\n");
 			printf("\tmax length=8, and the first character is not 0-9\n");
@@ -1006,7 +1048,7 @@ static int wenv_help_ex(enum ENUM_CMD cmd)
 			if(cmd != CMD_HELP) break;
 		default:
 			printf("\nFor more information:  http://chenall.net/tag/grub4dos\n");
-			printf("to get source and bin: http://grub4dos-chenall.googlecode.com\n");
+			printf("to get source and bin: http://grubutils.googlecode.com\n");
 	}
 	return 0;
 }
@@ -1351,7 +1393,7 @@ static int strcpyn(char *dest,const char *src,int n)
 		*dest++ = *src++;
 	}
 	*dest = '\0';
-	return (int)(src=p);
+	return (int)(src-p);
 }
 
 static int envi_cmd(const char *var,char * const env,int flags)
@@ -1376,6 +1418,9 @@ static int envi_cmd(const char *var,char * const env,int flags)
 		return 1;
 	}
 	int i, j;
+	char ch[MAX_VAR_LEN +1] = "\0"; //使用ch中转可以保证字符截取正确.
+	strcpyn(ch,var,MAX_VAR_LEN);
+
 	if (flags == 2)//显示所有变量信息或包含指定字符的变量
 	{
 		int count=0;
@@ -1383,8 +1428,8 @@ static int envi_cmd(const char *var,char * const env,int flags)
 		{
 			if (VAR[i][0] < 'A')
 				continue;//非法或已删除变量.
-			if (var != NULL)//显示包含特定字符的变量
-			{
+			if (var != NULL && memcmp(VAR[i], ch, MAX_VAR_LEN))//包含特定字符的变量
+			{/*
 				for (j=0;j<MAX_VAR_LEN && var[j] != '\0';j++)
 				{
 					if (VAR[i][j] != var[j])
@@ -1393,7 +1438,7 @@ static int envi_cmd(const char *var,char * const env,int flags)
 						break;
 					}
 				}
-				if (j == -1) continue; //不匹配退出
+				if (j == -1) */continue; //不匹配退出
 			}
 			++count;
 			j = printfn(VAR[i],MAX_VAR_LEN);
@@ -1427,8 +1472,6 @@ static int envi_cmd(const char *var,char * const env,int flags)
 		return 1;
 	}
 
-	char ch[MAX_VAR_LEN +1] = "\0"; //使用ch中转可以保证字符截取正确.
-	strcpyn(ch,var,MAX_VAR_LEN);
 	j = 0xFF;
 	/*遍历变量名表
 	注: 添加 VAR[i][0] 判断,还有使用删除标记符"@"
@@ -1720,32 +1763,30 @@ static int ascii_unicode(const char *ch,char *addr)
 }
 
 // 小写转大写
-static char *upper(char * const string)
+static void upper(char *string)
 {
-	char *P=string;
-	while (*P)
+	while (*string)
 	{
-		if ((unsigned char)(*P - 'a') < 26) //字符如果在'a'-'z'之间
+		if ((unsigned char)(*string - 'a') < 26) //字符如果在'a'-'z'之间
 		{
-			*P &= 0xDF;//0XDF=11011111B 把第5位设为0就是大写,好像用位操作可以加快运算速度.
+			*string &= 0xDF;//0XDF=11011111B 把第5位设为0就是大写,好像用位操作可以加快运算速度.
 		}
-		P++;
+		string++;
 	}
-	return string;
+	return;
 }
 
-static char *lower(char * const string)
+static void lower(char *string)
 {
-	char *P=string;
-	while (*P)
+	while (*string)
 	{
-		if ((unsigned char)(*P - 'A') < 26)
+		if ((unsigned char)(*string - 'A') < 26)
 		{
-			*P |= 32;//32 = 00100000B,使用位操作只需要把第5位设为1就是小写了.
+			*string |= 32;//32 = 00100000B,使用位操作只需要把第5位设为1就是小写了.
 		}
-		P++;
+		string++;
 	}
-	return string;
+	return;
 }
 
 /* 比较字符串前n个字符(s1不分大小写), 相等返回0
@@ -1832,7 +1873,7 @@ static int printfn(char *str,int n)
 static char* next_line(char *arg, char eol)
 {
 	char *P=arg;
-
+	_next_line:
 	while(*P && *P != '\r' && *P != '\n')
 		P++;
 	if (*P == '\0')
@@ -1842,12 +1883,12 @@ static char* next_line(char *arg, char eol)
 	while(*++P)
 	{
 		if (*P == '\n' || *P == '\r' || *P == ' ' || *P == '\t')
-	 continue;
+			continue;
 		else
-	 break;
+			break;
 	}
-	if (*P == eol)
-		return next_line(P,eol);
+	if (*P == eol) //如果是注释符.
+		goto _next_line;
 	return P;
 }
 /*从指定文件中读取WENV的命令序列，并依次执行*/
