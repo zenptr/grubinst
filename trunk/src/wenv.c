@@ -159,7 +159,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 // 变量值
 #define ENVI ((char (*)[MAX_ENV_LEN])(BASE_ADDR + MAX_VARS * MAX_VAR_LEN))
 
-enum ENUM_CMD {CMD_HELP=-1, VAR_TIP=0, CMD_SET, CMD_GET, CMD_RESET, CMD_CALC, CMD_CALL, CMD_READ, CMD_CHECK, CMD_FOR};
+enum ENUM_CMD {CMD_HELP=-1, VAR_TIP=0, CMD_SET, CMD_GET, CMD_RESET, CMD_CALC, CMD_CALL, CMD_READ, CMD_CHECK, CMD_FOR, CMD_ECHO};
 // 缓冲
 static char arg_new[MAX_ARG_LEN];
 static int wenv_func(char *arg, int flags);		/* 功能入口 */
@@ -482,7 +482,7 @@ static int get_func(char *arg,int flags)
 		}
 		if (debug > 1)
 			printf("%s = %s",t_var,arg_new);
-		sprintf(arg_new,"%d\0",strlen(arg_new));
+		sprintf(arg_new,"%d",strlen(arg_new));
 		set_envi ("?_GET",arg_new);
 		return 1;
 	}
@@ -513,7 +513,7 @@ static int call_func(char *arg,int flags)
 			}
 			else 
 			{
-				sprintf(arg_new,"0x%X\0",ret);
+				sprintf(arg_new,"0x%X",ret);
 				set_envi ("?_WENV",arg_new);
 				return ret;
 			}
@@ -529,7 +529,7 @@ static int call_func(char *arg,int flags)
 	nul_terminate(cmd); /* 取得命令部份 */
 	ret = builtin_cmd(cmd, arg, flags);
 	if (errnum) return 0;
-	sprintf(arg_new,"0x%X\0",ret);
+	sprintf(arg_new,"0x%X",ret);
 	set_envi ("?_WENV",arg_new);
 	return ret;
 }
@@ -936,7 +936,7 @@ static int for_func(char *arg, int flags)
 		for (;(step>0)?start<=end:start>=end; start += step)
 		{
 			strcpyn(command_buff,cmd,MAX_ENV_LEN);
-			sprintf(rep,"%ld\0",start);
+			sprintf(rep,"%ld",start);
 			if (replace (command_buff,sub,rep) == 0)
 				return 0;
 			ret = wenv_func(command_buff ,flags);
@@ -1016,20 +1016,21 @@ static int wenv_help_ex(enum ENUM_CMD cmd)
 			printf(" Using variables in GRUB4DOS, Compiled time: %s %s\n", __DATE__, __TIME__);
 		case VAR_TIP:
 			printf("\tVARIABLE is made of characters \"_/A-Z/a-z/0-9\"\n");
-			printf("\tmax length=8, and the first character is not 0-9\n");
+			printf("\tmax length=8, and the first character is not 0-9\n\n");
 			if(cmd != CMD_HELP) break;
 		case CMD_SET: // set
-			printf("\n WENV SET VARIABLE=[$<U|L>,] [$input,] STRING\n");
-			printf("          VARIABLE=[[$<U|L>,] <[[STRING] [${VARIABLE}]] | [*ADDR]>]\n");
+			printf(" WENV SET VARIABLE=[$<U|L>,] [$input,] STRING\n");
+			printf("      SET VARIABLE=[[$<U|L>, ] <[[STRING] [${VARIABLE}]] | [*ADDR]>]\n");
+			printf("      SET [PREFIX[*]]\n");
 			if(cmd != CMD_HELP) break;
 		case CMD_GET:   // get
-			printf(" WENV GET [VARIABLE]\n");
+			printf(" WENV GET [VARIABLE] | [PREFIX[*]]\n");
 			if(cmd != CMD_HELP) break;
 		case CMD_RESET: // reset
 			printf(" WENV RESET [VARIABLE] | [PREFIX[*]]\n");
 			if(cmd != CMD_HELP) break;
 		case CMD_CALC:  // calc
-			printf(" WENV CALC <${VAR}|*ADDR> [=<${VAR}|[*]INTEGER> [OPERATOR <${VAR}|[*]INT...>]]>\n");
+			printf(" WENV CALC <${VAR}|*ADDR> [=<${VAR}|[*]INT...> [OPERATOR <${VAR}|[*]INT...>]]\n");
 			if(cmd != CMD_HELP) break;
 		case CMD_READ:  // read
 			printf(" WENV READ <FILE>\n");
@@ -1043,8 +1044,11 @@ static int wenv_help_ex(enum ENUM_CMD cmd)
 			if(cmd != CMD_HELP) break;
 		case CMD_FOR:	//for
 			printf(" WENV FOR /L %ci IN (start,step,end) DO wenv-command\n",'%');
-			printf(" WENV FOR /F [\"options\"] %ci IN ( file ) DO wenv-command\n",'%');
-			printf(" WENV FOR /F [\"options\"] %ci IN (\"string\") DO wenv-command\n",'%');
+			printf("      FOR /F [\"options\"] %ci IN ( file ) DO wenv-command\n",'%');
+			printf("      FOR /F [\"options\"] %ci IN (\"string\") DO wenv-command\n",'%');
+			if(cmd != CMD_HELP) break;
+		case CMD_ECHO:	//echo
+			printf(" WENV ECHO [string]\n");
 			if(cmd != CMD_HELP) break;
 		default:
 			printf("\nFor more information:  http://chenall.net/tag/grub4dos\n");
@@ -1127,32 +1131,55 @@ static int var_expand(char **arg, char **out)
 	}
 
 	errnum = 0;
-	if (*p != '}')
-	{
-		if (*p == '$' && p[1] == '{')
-		{
-			char *p1 = value;
-			i = p - *arg;
-			strcpyn(p1,*arg,i);
-			p1 += i;
-			p++;
-			if (var_expand(&p, &p1))
-			{
-				i = 1;
-				while (i && *++p)
-				{
-					if (*p == '{')
-						i++;
-					if (*p == '}')
-						i--;
-					*p1++ = *p;
-				}
 
-				*arg = p;
-				p1 = value;
-				return var_expand(&p1,out);
+	if (*p == '$' && p[1] == '{')
+	{
+		char *p1 = value;
+		i = p - *arg;
+		strcpyn(p1,*arg,i);
+		p1 += i;
+		p++;
+		if (var_expand(&p, &p1))
+		{
+			i = 1;
+			while (i && *++p)
+			{
+				if (*p == '{')
+					i++;
+				if (*p == '}')
+					i--;
+				*p1++ = *p;
+			}
+
+			*arg = p;
+			p1 = value;
+			return var_expand(&p1,out);
+		}
+	}
+	
+	char _tmp[MAX_ENV_LEN] = "\0";
+	char *rep = NULL;
+	char *sub = _tmp;
+	if (*p == '!')
+	{
+		int quote = 0;
+		p++;
+		while (*p != '}' && (*sub++ = *p++) )
+		{
+			if (*p == '=')
+			{
+				rep = sub++;
+				p++;
 			}
 		}
+		if (rep == NULL)
+			return 0;
+		*rep++ = 0;
+		sub = _tmp;
+	}
+
+	if (*p != '}')
+	{
 		return 0;
 	}
 
@@ -1178,7 +1205,12 @@ static int var_expand(char **arg, char **out)
 				len = 0xFFFFFFFF;
 			}
 		}
-		else
+		else if (rep != NULL)
+		{
+			replace(value,sub,rep);
+			p = value;
+		}
+		else 
 		{
 			int str_len = strlen(value);
 			if (start < 0LL) start += str_len;//确定起始位置
@@ -1520,7 +1552,7 @@ static int envi_cmd(const char *var,char * const env,int flags)
 	if (j != i) //添加新的变量
 	{
 		i = (j<i?j:i);//优先使用已删除的空间.
-		strcpyn(VAR[i] ,ch ,MAX_VAR_LEN);//添加变量名
+		memmove(VAR[i] ,ch ,MAX_VAR_LEN);//添加变量名
 	}
 	//添加或修改
 	strcpyn(ENVI[i],env,MAX_ENV_LEN);
@@ -1619,7 +1651,7 @@ static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
 	{
 		*val += val_tmp;
 		val_tmp = *val;
-		sprintf(p1,"%ld\0",val_tmp);
+		sprintf(p1,"%ld",val_tmp);
 		set_envi(envi,p1);
 	}
 	else if (p[0] == p[1] && (p[0] == '+' || p[0] == '-')) //计算x++
@@ -1630,7 +1662,7 @@ static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
 		else
 			val_tmp--;
 		p += 2;
-		sprintf(p1,"%ld\0",val_tmp);
+		sprintf(p1,"%ld",val_tmp);
 		set_envi(envi,p1);
 	}
 	*str_ptr = p;
@@ -1739,7 +1771,7 @@ static int calc_func (char *arg,int flags)
 	
 	if (var[0] != 0)
 	{
-		sprintf(&envi[8],"%ld\0",*p_result);
+		sprintf(&envi[8],"%ld",*p_result);
 		set_envi(var,&envi[8]);
 	}
 	errnum = 0;
@@ -1928,7 +1960,7 @@ static int read_func(char *arg,int flags)
 		 P = next_line(P,':');
 
 	int ret;
-	char sub[3] = "$0\0";
+	char sub[3] = "$0";
 	while (*P)
 	{
 		P1 = next_line(P,':');
