@@ -700,20 +700,23 @@ static int replace(char *str ,const char *sub,const char *rep)
 	while (*p_buff)
 	{
 		if (*p_buff == *sub && memcmp(p_buff,sub,isub) == 0)
-		{/*
-			for (i = 0;i<irep;i++)
-				*str++ = rep[i];*/
-			strcpyn(str,rep,irep);
-			str += irep;
+		{
+			if (irep > 0)
+			{
+				istr += irep;
+				if (istr > MAX_ENV_LEN)
+					return 0;
+				str += strcpyn(str,rep,irep);
+				//str += irep;
+			}
 			p_buff += isub;
-			istr += irep;
 		}
 		else
 		{
 			*str++ = *p_buff++;
 			istr++;
 		}
-		if (istr >= MAX_ENV_LEN)
+		if (istr > MAX_ENV_LEN)
 			return 0;
 	}
 	*str = '\0';
