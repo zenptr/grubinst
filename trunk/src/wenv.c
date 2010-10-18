@@ -49,6 +49,8 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grubutils.googlecode.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-10-17
+   1.BUG修正。
  2010-10-13
 	1.尝试添加变量嵌套支持。
 
@@ -1555,7 +1557,7 @@ static int envi_cmd(const char *var,char * const env,int flags)
 		memmove(VAR[i] ,ch ,MAX_VAR_LEN);//添加变量名
 	}
 	//添加或修改
-	strcpyn(ENVI[i],env,MAX_ENV_LEN);
+	memmove(ENVI[i],env,MAX_ENV_LEN);
 	return 1;
 }
 
