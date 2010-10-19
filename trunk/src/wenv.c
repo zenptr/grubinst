@@ -916,12 +916,18 @@ static int for_func(char *arg, int flags)
 		return !(errnum = ERR_BAD_ARGUMENT);
 	while (*arg == ' ') arg++;
 	check_sub = arg;
-	while (*arg && *arg != ')') arg++;
-	if (*check_sub == eol[1]) *(arg-1) = 0;
-
-	arg = skip_to(0, arg);	//关键字do
-	if (strcmp_ex(arg,"do") != 0)
+	arg = skip_to(0,arg);
+	while (*arg && strcmp_ex(arg,"do") != 0) //关键字do
+		arg = skip_to(0,arg);
+	if (*arg == 0)
 		return !(errnum = ERR_BAD_ARGUMENT);
+	/*检测')'*/
+	cmd = arg;
+	while (*--cmd == ' ');
+	if (*cmd-- != ')')
+		return !(errnum = ERR_BAD_ARGUMENT);
+	if (*check_sub == eol[1]) *cmd = 0;
+
 	cmd = skip_to(0,arg);	//设置要执行命令开始的指针
 	if (*cmd == '\0') return !(errnum = ERR_BAD_ARGUMENT);
 	
@@ -1128,7 +1134,7 @@ static int var_expand(char **arg, char **out)
 			//if (*(p-1) == '*') *(p-1) = '\0'; //截断
 			break;
 		}
-		else if (*p < '0' || i >= MAX_VAR_LEN) //非法字符或变量超过8个字符
+		else if (*p < '0' || *p > 'z' || i >= MAX_VAR_LEN) //非法字符或变量超过8个字符
 		{
 			break;
 		}
@@ -1182,6 +1188,14 @@ static int var_expand(char **arg, char **out)
 		*rep++ = 0;
 		sub = _tmp;
 	}
+	else if (*p == ',')
+	{
+		if (*++p == '?')
+		{
+			str_flag = 8;
+			p++;
+		}
+	}
 
 	if (*p != '}')
 	{
@@ -1190,9 +1204,15 @@ static int var_expand(char **arg, char **out)
 
 	*arg = p;
 
-	if (get_env(ch,value))
+	if (get_env(ch,value) || (str_flag & 8))
 	{
-		if (str_flag)
+		if (str_flag & 8)
+		{
+			i = strlen(value);
+			sprintf(value,"%d",i);
+			p = value;
+		}
+		else if (str_flag)
 		{
 			**arg = '\0';
 			p = strstrn(value, (char *)(int)start, str_flag & 1);
