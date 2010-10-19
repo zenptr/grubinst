@@ -1203,7 +1203,7 @@ static int var_expand(char **arg, char **out)
 	}
 
 	*arg = p;
-
+	value[0] = '\0';//简易初始化.
 	if (get_env(ch,value) || (str_flag & 8))
 	{
 		if (str_flag & 8)
