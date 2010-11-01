@@ -32,6 +32,8 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net
  更新信息(changelog):
+	2010-11-01
+		1.添加一个参数-o.
 	2010-09-04
 		1.尝试添加新的PCI信息显示格式（类似CHKPCI).
 		文件内容格式:
@@ -99,7 +101,7 @@ struct vdata
 #define VDATA	 ((struct vdata *)(0x600000+0x4000))
 #define FILE_BUF ((char *)0x684000)
 #define PCI ((struct pci_dev *)0x600000)
-
+static int out_fmt = 0;
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
@@ -175,7 +177,7 @@ int help(void)
 {
 return printf("\n CHKPCI For GRUB4DOS,Compiled time: %s %s\n\
 \n CHKPCI is a utility that can be used to scan PCI buses and report information about the PCI device.\n\
-\n CHKPCI [-h] [-cc:CC] [FILE]\n\
+\n CHKPCI [-h] [-o] [-cc:CC] [FILE]\n\
 \n Options:\n\
 \n -h      show this info.\n\
 \n -cc:CC  scan Class Codes with CC only.\n\
@@ -301,7 +303,7 @@ int chkpci(struct pci_dev *end)
 		while (*P && P[1] != '$') putchar(*P++);
 		putchar('\n');
 	}
-	while (P = find_line (P, '$' , 0))
+	while (p1 = P = find_line (P, '$' , 0))
 	{
 		if (*(unsigned long *)(P+1) & 0XFFDFDFDF != 0x5C494350) //PCI\
 			continue;
@@ -351,9 +353,16 @@ int chkpci(struct pci_dev *end)
 				if (dev.class && dev.class != pci->class) continue;
 				if (dev.revID && dev.revID != pci->revID) continue;
 				pci->venID = 0;
-				for (P = find_line(P, 0, 0);*P == '$';P = find_line(P, 0, 0));
-				//0x240a \n$ 也就是以$开头的行。
-				while (*P && *(unsigned short *)P != 0x240a) putchar(*P++);//输出内容直到文件尾或下一个以$开始的行。
+				if (out_fmt)
+				{
+					while (*++p1 && *p1 != '\r' && *p1 != '\n' && *p1 != ';') putchar(*p1);
+				}
+				else
+				{
+					for (P = find_line(P, 0, 0);*P == '$';P = find_line(P, 0, 0));
+					//0x240a \n$ 也就是以$开头的行。
+					while (*P && *(unsigned short *)P != 0x240a) putchar(*P++);//输出内容直到文件尾或下一个以$开始的行。
+				}
 				putchar('\n');
 				break;
 			}
@@ -372,32 +381,38 @@ int chkpci_func(char *arg,int flags)
 	struct pci_dev *devs = PCI;
 	*(unsigned long *)FILE_BUF = 0;
 	if (! pcibios_init(0)) return 0;
-	if (*arg)
+	while (*arg)
 	{
-		if (memcmp(arg,"-cc:",4) == 0 )
+		if (memcmp(arg, "-o",2) == 0)
+		{
+			out_fmt = 1;
+		}
+		else if (memcmp(arg,"-cc:",4) == 0 )
 		{
 			arg += 4;
 			if (! safe_parse_maxint(&arg,&cd))
 				return 0;
 			cd &= 0xff;
-			arg = skip_to(0,arg);
 		}
 		else if (memcmp(arg, "-h",2) == 0)
 		{
 			return help();
 		}
-		
-		if (*arg)
+		else
+			break;
+		arg = skip_to(0,arg);
+	}
+	
+	if (*arg)
+	{
+		if (! open(arg))
+			return 0;
+		if (! read ((unsigned long long)(int)FILE_BUF,0x100000,GRUB_READ))
+			return 0;
+		FILE_BUF[filemax] = 0;
+		if (*(unsigned long *)FILE_BUF != 0X24494350) 
 		{
-			if (! open(arg))
-				return 0;
-			if (! read ((unsigned long long)(int)FILE_BUF,0x100000,GRUB_READ))
-				return 0;
-			FILE_BUF[filemax] = 0;
-			if (*(unsigned long *)FILE_BUF != 0X24494350) 
-			{
-				read_cfg(filemax);
-			}
+			read_cfg(filemax);
 		}
 	}
 

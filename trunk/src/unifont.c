@@ -32,7 +32,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net
  * 2010-03-07
- * last modify 2010-04-20
+ * last modify 2010-10-24
  */
 #include "font/font.h"
 #include "grub4dos.h"
@@ -150,14 +150,13 @@ main ()
 		{
 			memmove((char *)BASE_FONT_ADDR + filemax ,p,(int)&GRUB - (int)p );
 			ushFontReaded = 1;
-			FONT_WIDTH = 11;
+			FONT_WIDTH = 10;
 			return fontfile_func(arg,flags);
 		}
 		return 0;
 
 	}
 	errnum = 0;
-	ushFontReaded = 0;
 	printf ("UNIFONT %s\nUse:\nUNIFONT UNIFONT_FILE\tLoad unicode font file.\nUNIFONT --unload\t\tUnload.",__DATE__);
 	return 1;
 }
@@ -198,7 +197,7 @@ graphics_cursor (int set)
 	ch1 = ch & 0xff;
 	pat += (ch1 << 4);
 
-	if (ushFontReaded && ((ch & 0xff00 ) || (ALL_FONT && ch1 >32 && ch1 != 218 && ch1 != 191 && ch1 != 192 && ch1 != 217 && ch1 != 196 && ch1 != 179)))
+	if (ushFontReaded && ((ch & 0xff00) || (ALL_FONT && ch1 > 0x20 && ch1 != 218 && ch1 != 191 && ch1 != 192 && ch1 != 217 && ch1 != 196 && ch1 != 179)))
 	{
 		WORD bytesPerLine = 0;
 		int dotpos;
@@ -508,5 +507,6 @@ static int unifont_unload(void)
 	memmove(*term_backup_orig_addr, term_backup, sizeof(struct term_entry));
 	if (graphics_cursor_bak) graphics_CURSOR = graphics_cursor_bak;
 	(*(DWORD *)VARIABLE_ADDR) = 0;
+	ushFontReaded = 0;
 	return printf("UNIFONT Unload success!\n");
 }

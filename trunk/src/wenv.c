@@ -49,6 +49,10 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grubutils.googlecode.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-11-01
+	1.echo字命令修改.添加两个参数.
+	 1).-e 充许转义输出.
+	 2).-n 输出不自动加回车符.
  2010-10-17
    1.BUG修正。
  2010-10-13
@@ -345,7 +349,7 @@ static int wenv_func(char *arg, int flags)
 			if (strcmp_ex(arg, p_cmd_list[i].name) == 0)
 			{
 				arg = skip_to(0, arg);
-				if(*arg < (char)p_cmd_list[i].flags)
+				if((unsigned char)*arg < (unsigned char)p_cmd_list[i].flags)
 					return wenv_help_ex(p_cmd_list[i].flags >> 8);
 				ret = p_cmd_list[i].func(arg,flags);
 				break;
@@ -1007,16 +1011,26 @@ static int for_func(char *arg, int flags)
 
 static int echo_func(char *arg, int flags)
 {
-	int i=parse_string(arg); //格式化字符串
-	#if 1
+	int i = 512;
+	int echo_cr = 1;
+	int echo_ec = 0;
+	for (;;)
+	{
+		if (strcmp_ex(arg,"-n") == 0)
+			echo_cr = 0;
+		else if (strcmp_ex(arg,"-e") == 0)
+			echo_ec = 1;
+		else
+			break;
+		arg = skip_to (0,arg);
+	}
+	
+	if (echo_ec)
+		i = parse_string(arg); //格式化字符串
 	printfn(arg,i);
-	putchar('\n');
+	if (echo_cr)
+		putchar('\n');
 	return 1;
-	#else
-	if (arg[i] != 0) arg[i] = 0;
-	return printf("%s\n",arg);
-	#endif
-//	return 1;
 }
 
 static int wenv_help_ex(enum ENUM_CMD cmd)
