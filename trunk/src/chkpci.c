@@ -31,22 +31,28 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 /*
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net
- ¸üĞÂĞÅÏ¢(changelog):
+ æ›´æ–°ä¿¡æ¯(changelog):
+	2010-11-03
+		1.-cc,-scå‚æ•°æ”¯æŒåˆ—è¡¨
+		ä¾‹å­ï¼šã€€chkpci -cc:1 -sc:0,4
+		2.æ·»åŠ -srs -net -vgaå‚æ•°ï¼ˆä¸èƒ½åŒæ—¶ä½¿ç”¨ï¼Œä¹Ÿä¸å¯ä»¥å’Œ-cc -scå‚æ•°ä½¿ç”¨ï¼Œè‹¥æ˜¯åŒæ—¶ä½¿ç”¨ä»¥æœ€åä¸€ä¸ªä¸ºå‡†ï¼‰
+	2010-11-02
+		ï¼‘.æ·»åŠ å‚æ•°-sc:
 	2010-11-01
-		1.Ìí¼ÓÒ»¸ö²ÎÊı-o.
+		1.æ·»åŠ ä¸€ä¸ªå‚æ•°-o.
 	2010-09-04
-		1.³¢ÊÔÌí¼ÓĞÂµÄPCIĞÅÏ¢ÏÔÊ¾¸ñÊ½£¨ÀàËÆCHKPCI).
-		ÎÄ¼şÄÚÈİ¸ñÊ½:
-			µÚÒ»ĞĞ¹Ì¶¨PCI$
-			¿ÉÑ¡¹Ì¶¨Êä³öÄÚÈİ¡£
+		1.å°è¯•æ·»åŠ æ–°çš„PCIä¿¡æ¯æ˜¾ç¤ºæ ¼å¼ï¼ˆç±»ä¼¼CHKPCI).
+		æ–‡ä»¶å†…å®¹æ ¼å¼:
+			ç¬¬ä¸€è¡Œå›ºå®šPCI$
+			å¯é€‰å›ºå®šè¾“å‡ºå†…å®¹ã€‚
 			...
-			$PCIÉè±¸ĞÅÏ¢
-			Æ¥ÅäºóÒªÏÔÊ¾µÄÄÚÈİ
+			$PCIè®¾å¤‡ä¿¡æ¯
+			åŒ¹é…åè¦æ˜¾ç¤ºçš„å†…å®¹
 			...
-			$pciÉè±¸ĞÅÏ¢2
-			Æ¥ÅäºóÒªÏÔÊ¾µÄÄÚÈİ
+			$pciè®¾å¤‡ä¿¡æ¯2
+			åŒ¹é…åè¦æ˜¾ç¤ºçš„å†…å®¹
 			...
-		Ò»¸öÀı×Ó:
+		ä¸€ä¸ªä¾‹å­:
 			===========CHKPCI.PCI=============
 			PCI$
 			$PCI\VEN_8086&DEV_7113
@@ -58,14 +64,14 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 			fat copy /txtsetup.oem (fd0)/
 			===========CHKPCI.PCI=============
 	2010-08-28
-		1.Ìí¼Ó°ïÖúĞÅÏ¢ -h ²ÎÊı.
-		2.Ìí¼Ó²ÎÊı -cc:CC,ÓÃÓÚÏÔÊ¾Ö¸¶¨Éè±¸.
+		1.æ·»åŠ å¸®åŠ©ä¿¡æ¯ -h å‚æ•°.
+		2.æ·»åŠ å‚æ•° -cc:CC,ç”¨äºæ˜¾ç¤ºæŒ‡å®šè®¾å¤‡.
 	2010-08-27
-		ĞŞÕı,ÔÚÊµ»úÊ¹ÓÃÊ±»áÔì³É¿¨»úµÄÎÊÌâ.
+		ä¿®æ­£,åœ¨å®æœºä½¿ç”¨æ—¶ä¼šé€ æˆå¡æœºçš„é—®é¢˜.
 	2010-08-26
-		Ìí¼Ó¶ÁÈ¡PCIDEVS.TXT°´¸ñÊ½ÏÔÊ¾Éè±¸ĞÅÏ¢µÄ¹¦ÄÜ.
+		æ·»åŠ è¯»å–PCIDEVS.TXTæŒ‰æ ¼å¼æ˜¾ç¤ºè®¾å¤‡ä¿¡æ¯çš„åŠŸèƒ½.
 	2010-08-25
-		µÚÒ»°æ,Ö»ÄÜÏÔÊ¾PCIĞÅÏ¢.
+		ç¬¬ä¸€ç‰ˆ,åªèƒ½æ˜¾ç¤ºPCIä¿¡æ¯.
  */
 
 #include "grub4dos.h"
@@ -143,7 +149,7 @@ void outl(int port, int val)
 		__asm__ volatile ("outl %%eax,%%dx" : : "a"(val), "d"(port));
 }
 
-/*¼ì²âÊÇ·ñ´æÔÚPCI BIOS*/
+/*æ£€æµ‹æ˜¯å¦å­˜åœ¨PCI BIOS*/
 unsigned long pcibios_init(int flags)
 {
 	unsigned long tmp;
@@ -186,16 +192,16 @@ return printf("\n CHKPCI For GRUB4DOS,Compiled time: %s %s\n\
  to get this source and bin: http://grubutils.googlecode.com\n",__DATE__,__TIME__);
 }
 
-/*×Ö·û´®×ª»»³ÉHEXÊı¾İÈçAB12×ª³É0xAB12*/
+/*å­—ç¬¦ä¸²è½¬æ¢æˆHEXæ•°æ®å¦‚AB12è½¬æˆ0xAB12*/
 unsigned long asctohex(char *asc)
 {
 	unsigned long t = 0L;
 	unsigned char a;
 	while(a=*asc++)
 	{
-		if ((a -= '0') > 9) /*×Ö·û¼õÈ¥'0',Èç¹ûÊÇ'0'-'9'µÃµ½0-9Êı×Ö*/
+		if ((a -= '0') > 9) /*å­—ç¬¦å‡å»'0',å¦‚æœæ˜¯'0'-'9'å¾—åˆ°0-9æ•°å­—*/
 		{
-			a = (a | 32) - 49;/*ÆäËüµÄ×ÖÄ¸×ª»»³É´óĞ´ÔÙ¼õÈ¥49Ó¦¸ÃÔÚ0-5Ö®¼ä·ñÔò¶¼ÊÇ·Ç·¨.*/
+			a = (a | 32) - 49;/*å…¶å®ƒçš„å­—æ¯è½¬æ¢æˆå¤§å†™å†å‡å»49åº”è¯¥åœ¨0-5ä¹‹é—´å¦åˆ™éƒ½æ˜¯éæ³•.*/
 
 			if (a > 5)
 				break;
@@ -207,9 +213,9 @@ unsigned long asctohex(char *asc)
 	return t;
 }
 
-/*²éÕÒÒÔch¿ªÍ·µÄĞĞ,Åöµ½ÒÔch1×Ö·û¿ªÍ·¾Í½áÊø.
-	Èç¹ûchÊÇ0,Ôò²éÑ¯ÈÎÒâ·ÇÒÔch1×Ö·û¿ªÍ·µÄĞĞ.
-	·µ»ØÖµ¸ÃĞĞÔÚÄÚ´æÖĞµÄµØÖ·.·ñÔò·µ»Ø0;
+/*æŸ¥æ‰¾ä»¥chå¼€å¤´çš„è¡Œ,ç¢°åˆ°ä»¥ch1å­—ç¬¦å¼€å¤´å°±ç»“æŸ.
+	å¦‚æœchæ˜¯0,åˆ™æŸ¥è¯¢ä»»æ„éä»¥ch1å­—ç¬¦å¼€å¤´çš„è¡Œ.
+	è¿”å›å€¼è¯¥è¡Œåœ¨å†…å­˜ä¸­çš„åœ°å€.å¦åˆ™è¿”å›0;
 */
 unsigned char *find_line(char *P,char ch,char ch1)
 {
@@ -226,7 +232,7 @@ unsigned char *find_line(char *P,char ch,char ch1)
 	return NULL;
 }
 
-/*¶ÁÈ¡PCIDEVS.TXTÎÄ¼şµ½ÄÚÈİÖĞ,²¢×÷¼òµ¥Ë÷Òı*/
+/*è¯»å–PCIDEVS.TXTæ–‡ä»¶åˆ°å†…å®¹ä¸­,å¹¶ä½œç®€å•ç´¢å¼•*/
 int read_cfg(long len)
 {
 	unsigned char *P=FILE_BUF;
@@ -250,7 +256,7 @@ int read_cfg(long len)
 	return 0;
 }
 
-/*°´PCIDEVS.TXT¸ñÊ½ÏÔÊ¾¶ÔÓ¦µÄÓ²¼şĞÅÏ¢,¾ßÌå¸ñÊ½Çë²é¿´Ïà¹ØÎÄµµ*/
+/*æŒ‰PCIDEVS.TXTæ ¼å¼æ˜¾ç¤ºå¯¹åº”çš„ç¡¬ä»¶ä¿¡æ¯,å…·ä½“æ ¼å¼è¯·æŸ¥çœ‹ç›¸å…³æ–‡æ¡£*/
 int show_dev(struct pci_dev *pci)
 {
 	char *P,*P1;
@@ -295,10 +301,10 @@ int show_dev(struct pci_dev *pci)
 int chkpci(struct pci_dev *end)
 {
 	struct pci_dev *pci;
-	char *p1,*P = find_line (FILE_BUF, 0 , 0);//Ìø¹ıµÚÒ»ĞĞ¡£!
+	char *p1,*P = find_line (FILE_BUF, 0 , 0);//è·³è¿‡ç¬¬ä¸€è¡Œã€‚!
 	unsigned long t;
 	struct pci_dev dev;
-	if (*P != '$')/*Êä³öÎÄ¼şÍ·²¿·İ*/
+	if (*P != '$')/*è¾“å‡ºæ–‡ä»¶å¤´éƒ¨ä»½*/
 	{
 		while (*P && P[1] != '$') putchar(*P++);
 		putchar('\n');
@@ -360,8 +366,8 @@ int chkpci(struct pci_dev *end)
 				else
 				{
 					for (P = find_line(P, 0, 0);*P == '$';P = find_line(P, 0, 0));
-					//0x240a \n$ Ò²¾ÍÊÇÒÔ$¿ªÍ·µÄĞĞ¡£
-					while (*P && *(unsigned short *)P != 0x240a) putchar(*P++);//Êä³öÄÚÈİÖ±µ½ÎÄ¼şÎ²»òÏÂÒ»¸öÒÔ$¿ªÊ¼µÄĞĞ¡£
+					//0x240a \n$ ä¹Ÿå°±æ˜¯ä»¥$å¼€å¤´çš„è¡Œã€‚
+					while (*P && *(unsigned short *)P != 0x240a) putchar(*P++);//è¾“å‡ºå†…å®¹ç›´åˆ°æ–‡ä»¶å°¾æˆ–ä¸‹ä¸€ä¸ªä»¥$å¼€å§‹çš„è¡Œã€‚
 				}
 				putchar('\n');
 				break;
@@ -377,9 +383,11 @@ int chkpci_func(char *arg,int flags)
 #ifdef DEBUG
 	unsigned long bus,dev,func;
 #endif
-	unsigned long long cd = 0;
+	char sc[6] = "\xff\xff\xff\xff\xff";
+	char cc[6] = "\xff\xff\xff\xff\xff";
 	struct pci_dev *devs = PCI;
 	*(unsigned long *)FILE_BUF = 0;
+	int i;
 	if (! pcibios_init(0)) return 0;
 	while (*arg)
 	{
@@ -389,20 +397,59 @@ int chkpci_func(char *arg,int flags)
 		}
 		else if (memcmp(arg,"-cc:",4) == 0 )
 		{
+			unsigned long long t;
 			arg += 4;
-			if (! safe_parse_maxint(&arg,&cd))
-				return 0;
-			cd &= 0xff;
+			for (i = 0;i < 4; i++)
+			{
+				if (! safe_parse_maxint(&arg,&t))
+					return 0;
+				cc[i] = (char)t;
+				if (*arg != ',')
+					break;
+				arg++;
+			}
+		}
+		else if (memcmp(arg,"-sc:",4) == 0)
+		{
+			unsigned long long t;
+			arg += 4;
+			for (i = 0;i < 4; i++)
+			{
+				if (! safe_parse_maxint(&arg,&t))
+					return 0;
+				sc[i] = (char)t;
+				if (*arg != ',')
+					break;
+				arg++;
+			}
 		}
 		else if (memcmp(arg, "-h",2) == 0)
 		{
 			return help();
 		}
+		else if (memcmp(arg,"-srs",4) == 0)
+		{
+			*(int *)cc = 0xFFFFFF01;
+			*(int *)sc = 0x07060400;
+		}
+		else if (memcmp(arg,"-net",4) == 0)
+		{
+			*(int *)cc = 0xFFFFFF02;
+			*(int *)sc = 0XFFFFFFFF;
+		}
+		else if (memcmp(arg,"-vga",4) == 0)
+		{
+			*(int *)cc = 0xFFFFFF03;
+			*(int *)sc = 0XFFFFFFFF;
+		}
 		else
 			break;
 		arg = skip_to(0,arg);
 	}
-	
+
+	if (cc[0] == '\xff')//å¿…é¡»æŒ‡å®šccå‚æ•°ï¼Œå¦åˆ™scå‚æ•°æ— æ•ˆï¼
+		sc[0] = '\xff';
+
 	if (*arg)
 	{
 		if (! open(arg))
@@ -416,12 +463,14 @@ int chkpci_func(char *arg,int flags)
 		}
 	}
 
-/* Ñ­»·²éÕÒËùÓĞÉè±¸.
+/* å¾ªç¯æŸ¥æ‰¾æ‰€æœ‰è®¾å¤‡.
 	for (bus=0;bus<5;bus++)
 	  for (dev=0;dev<32;dev++)
 	    for (func=0;func<8;func++)
 		    regVal = 0x80000000 | bus << 16 | dev << 11 | func << 8;
 */
+	int check = (cc[0] == '\xff')?0x100:1;
+
 	for (regVal = 0x80000000;regVal < 0x8005FF00;regVal += 0x100)
 	{
 		outl(0xCF8,regVal);
@@ -436,38 +485,68 @@ int chkpci_func(char *arg,int flags)
 			printf("Check:%08X B:%02x E:%02X F:%02X\n",regVal,bus,dev,func);
 		}
 #endif
-		if (ret == -1L) //0xFFFFFFÎŞĞ§Éè±¸
+		if (ret == -1L) //0xFFFFFFæ— æ•ˆè®¾å¤‡
 		{
-			if ((regVal & 0x700) == 0) regVal += 0x700;//¹¦ÄÜºÅÎª0,Ìø¹ı¸ÃÉè±¸.
+			if ((regVal & 0x700) == 0) regVal += 0x700;//åŠŸèƒ½å·ä¸º0,è·³è¿‡è¯¥è®¾å¤‡.
 			continue;
 		}
 
-		*(unsigned long *)&devs->venID = ret;/*ret·µ»ØÖµµÍ16Î»ÊÇPCI_VENDOR_ID,¸ß16Î»ÊÇPCI_DEVICE_ID*/
+		*(unsigned long *)&devs->venID = ret;/*retè¿”å›å€¼ä½16ä½æ˜¯PCI_VENDOR_ID,é«˜16ä½æ˜¯PCI_DEVICE_ID*/
 		
-		/*»ñÈ¡PCI_CLASS_REVISION,¸ß24Î»ÊÇCLASSĞÅÏ¢(CC_XXXXXX),µÍ8Î»ÊÇ°æ±¾ĞÅÏ¢(REG_XX)*/
+		/*è·å–PCI_CLASS_REVISION,é«˜24ä½æ˜¯CLASSä¿¡æ¯(CC_XXXXXX),ä½8ä½æ˜¯ç‰ˆæœ¬ä¿¡æ¯(REG_XX)*/
 		outl(0xCF8,regVal | 8);
 		*(unsigned long *)&devs->revID = inl(0xCFC); /* High 24 bits are class, low 8 revision */
+//		if ((cc == '\xff' || (char)(devs->class >> 8) == cc) && (sc == '\xff' || (char)(devs->class) == sc)) //å¦‚æœæŒ‡å®šäº†CDå‚æ•°,CDå€¼ä¸ç¬¦åˆæ—¶ä¸æ˜¾ç¤º.
+//		/{
+		/*è·å–PCI_HEADER_TYPEç±»å½¢,ç›®å‰åªç”¨äºåé¢æ£€æµ‹æ˜¯å¦å•åŠŸèƒ½è®¾å¤‡*/
+		outl(0xCF8,regVal | 0xC);
+		ret = inl(0xCFC);
+		ret >>= 16;
 
-		if ((char)cd == 0 || (char)(devs->class >> 8) == (char)cd) //Èç¹ûÖ¸¶¨ÁËCD²ÎÊı,CDÖµ²»·ûºÏÊ±²»ÏÔÊ¾.
+		if (check & 1) //æ£€æµ‹Class Code å’Œã€€Sub class
 		{
-			/*»ñÈ¡PCI_HEADER_TYPEÀàĞÎ,Ä¿Ç°Ö»ÓÃÓÚºóÃæ¼ì²âÊÇ·ñµ¥¹¦ÄÜÉè±¸*/
-			outl(0xCF8,regVal | 0xC);
-			ret = inl(0xCFC);
-			ret >>= 16;
-			{//¶ÁÈ¡SUBSYSĞÅÏ¢,µÍ16Î»ÊÇPCI_SUBSYSTEM_ID,¸ß16Î»ÊÇPCI_SUBSYSTEM_VENDOR_ID(Ò²½ĞOEMĞÅÏ¢)
-				outl(0xcf8,regVal | 0x2c);
-				devs->subsys = inl(0xcfc);
+			check = 1;
+			char chk_tmp = (char)(devs->class >> 8);
+			for (i=0;i<4 && cc[i] != '\xff';i++)
+			{
+				if (cc[i] == chk_tmp)
+				{
+					if (sc[0] != '\xff')
+					{
+						chk_tmp = (char)devs->class;
+						for (i=0;i<4 && sc[i] != '\xff';i++)
+						{
+							if (sc[i] == chk_tmp)
+							{
+								check = 0x101;
+								break;
+							}
+						}
+					}
+					else
+					{
+						check = 0x101;
+					}
+					break;
+				}
 			}
+		}
+
+		if (check & 0x100)
+		{//è¯»å–SUBSYSä¿¡æ¯,ä½16ä½æ˜¯PCI_SUBSYSTEM_ID,é«˜16ä½æ˜¯PCI_SUBSYSTEM_VENDOR_ID(ä¹Ÿå«OEMä¿¡æ¯)
+			outl(0xcf8,regVal | 0x2c);
+			devs->subsys = inl(0xcfc);
 			if (*(unsigned long *)FILE_BUF != 0X24494350)
 			{
 				printf("PCI\\VEN_%04X&DEV_%04X&SUBSYS_%08X&CC_%04X%02X&REV_%02X\n",
-						devs->venID,devs->devID,devs->subsys,devs->class,devs->prog,devs->revID);
+					devs->venID,devs->devID,devs->subsys,devs->class,devs->prog,devs->revID);
 				if (*arg) show_dev(devs);
 			}
 			devs++;
 		}
+
 		devs->venID = 0;
-		/*Èç¹ûÊÇµ¥¹¦ÄÜÉè±¸,¼ì²âÏÂÒ»Éè±¸*/
+		/*å¦‚æœæ˜¯å•åŠŸèƒ½è®¾å¤‡,æ£€æµ‹ä¸‹ä¸€è®¾å¤‡*/
 		if ( (regVal & 0x700) == 0 && (ret & 0x80) == 0) regVal += 0x700;
 	}
 	if (*(unsigned long *)FILE_BUF == 0X24494350) return chkpci(devs);

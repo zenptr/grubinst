@@ -572,7 +572,7 @@ static int fat_func (char *arg,int flags)
 		printf("FAT error: %d\n",res);
 	#endif
 	}
-	return errnum;
+	return !res;
 };
 
 /*以下内容本来是要放在DISKIO.C的，因为只有几个函数，为了方便就直接整合到这里来了*/

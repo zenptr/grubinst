@@ -14,12 +14,11 @@ echo "#define _TIME_M $_TIME_M" >>fat_config.h
 echo "#define _TIME_S $_TIME_S" >>fat_config.h
 echo "#define GET_FATTIME" >>fat_config.h
 gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE fat.c ff.c -o fat.o
-echo "#define FAT_MINI" >>fat_config.h
-gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE fat.c ff.c -o fatmini.o
+gcc -DFAT_MINI -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE fat.c ff.c -o fatmini.o
 objcopy -O binary fat.o fat
 objcopy -O binary fatmini.o fatmini
 rm fat*.o
 gzip -9 fat fatmini
 rename 's/\.gz$//' fat*.gz
-date=`date +%Y-%m-%d`
-zip -9 -r -q "../fat $date.zip" ./
+date=`date -u +%Y-%m-%d`
+zip -9 -r -q "../fat-$date.zip" fat fatmini

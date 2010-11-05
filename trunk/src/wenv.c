@@ -148,7 +148,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	2.解决当使用read可能导致出错的问题.
  */
 #include "grub4dos.h"
-//#define DEBUG
+#define DEBUG
 
 #define MAX_ARG_LEN 1024
 //用户可使用变量数
@@ -661,6 +661,7 @@ static int check_func(char *arg,int flags)
 		while (*p2 == ' ') p2++;
 	}
 	*/
+	printf("tt:%s",p2);
 	errnum = 0; //清除错误信息
 	switch(op)
 	{
