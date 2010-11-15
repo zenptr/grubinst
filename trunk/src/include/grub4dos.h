@@ -2,8 +2,8 @@
  * The C code for a grub4dos executable may have defines as follows:
  * 用于编写外部命令的函数定义。
 */
-#ifndef GRUB4DOS_2010_03_01
-#define GRUB4DOS_2010_03_01
+#ifndef GRUB4DOS_2010_12_01
+#define GRUB4DOS_2010_12_01
 int grub_main (char *arg,int flags);
 #undef NULL
 #define NULL         ((void *) 0)
@@ -242,7 +242,10 @@ devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, u
 #define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[47]))
 #define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[48]))
 #define get_mmap_entry ((int (*)(char *,int))((*(int **)0x8300)[49]))
-#define getrtsecs ((int (*)(void))((*(int **)0x8300)[50]))
+#define malloc ((void *(*)(int size))((*(int **)0x8300)[50]))
+#define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
+
+//#define getrtsecs ((int (*)(void))((*(int **)0x8300)[50]))
 //int getrtsecs (void);
 //#define graphics_get_font ((unsigned char *(*)(void))((*(int **)0x8300)[51]))
 

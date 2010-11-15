@@ -49,6 +49,8 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grubutils.googlecode.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-11-14
+	1.echo自动添加的回车符改为\r\n
  2010-11-01
 	1.echo字命令修改.添加两个参数.
 	 1).-e 充许转义输出.
@@ -876,7 +878,7 @@ static int for_func(char *arg, int flags)
 				delims[1] = '\0';
 				for(i=0;i<7 && *arg;i++)
 				{
-					if (*arg == '\"' || *arg == ' ')
+					if (*arg == '\"' || (*arg == ' ' && arg[1] != '\"'))
 						break;
 					delims[i] = *arg++;
 				}
@@ -1030,7 +1032,9 @@ static int echo_func(char *arg, int flags)
 		i = parse_string(arg); //格式化字符串
 	printfn(arg,i);
 	if (echo_cr)
-		putchar('\n');
+	{
+		putstr("\r\n");
+	}
 	return 1;
 }
 

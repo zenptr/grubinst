@@ -82,7 +82,7 @@ diskid_func (char *arg,int flags)
   
   if (*arg && (memcmp(arg,"ret=",4) == 0))
   {
-	arg += 4;
+	arg =skip_to(1,arg);
 	safe_parse_maxint(&arg,&ret);
 	arg = skip_to (0,arg);
   }
@@ -93,7 +93,7 @@ diskid_func (char *arg,int flags)
   }
 	else if (memcmp(arg, "gid=", 4) == 0) /*gid x:y */
   {
-	arg += 4;
+	arg =skip_to(1,arg);
 	if (*arg=='*')/*如果是以*开头的,则读取对应内存地址的值*/
 	{
 		arg++;

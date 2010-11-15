@@ -14,11 +14,13 @@ fi
 for file in *.c;do
 	OUT=./tmp/${file%*.c}.o
 	if [ ${file} -ot ./bin/${file%*.c} ]; then
-		continue
+		if [ ./include/grub4dos.h -ot ./bin/${file%*.c} ] ; then
+			continue
+		fi
 	fi
 	echo "build $file --> $OUT --> ./bin/${file%*.c}"
 	gcc -nostdlib -I./include/ -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE $file -o $OUT || continue
 	objcopy -O binary $OUT ./bin/${file%*.c} || continue
 	rm -f ./zip/${file%*.c}.zip
-	zip -9 -j -q "./zip/${file%*.c}-${DATE}.zip" $file ${file%*.c}*.* include/${file%*.c}.h ./bin/${file%*.c}
+	zip -9 -j -q "./zip/${file%*.c}-${DATE}.zip" ./bin/${file%*.c}
 done
