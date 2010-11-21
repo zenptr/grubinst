@@ -4,7 +4,6 @@
 */
 #ifndef GRUB4DOS_2010_12_01
 #define GRUB4DOS_2010_12_01
-int grub_main (char *arg,int flags);
 #undef NULL
 #define NULL         ((void *) 0)
 

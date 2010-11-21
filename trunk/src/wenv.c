@@ -16,13 +16,9 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
-
 /*
  * compile:
-
 gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE wenv.c
-
  * disassemble:			objdump -d a.out 
  * confirm no relocation:	readelf -r a.out
  * generate executable:		objcopy -O binary a.out wenv
@@ -49,6 +45,14 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grubutils.googlecode.com
  * For more information.Please visit web-site at http://chenall.net/grub4dos_wenv/
  * 2010-06-20
+ 2010-11-21
+	1.添加三个伪变量
+	@DATE		当前日期: 2010-11-21
+	@TIME		当前时间: 17:05:30
+	@RANDOM	产生一个随机数
+	例子,显示今天日期. echo ${@DATE}
+ 2010-11-20
+	1.修改主函数执行代码,优化整理架构.支持复合语句.
  2010-11-14
 	1.echo自动添加的回车符改为\r\n
  2010-11-01
@@ -59,7 +63,6 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
    1.BUG修正。
  2010-10-13
 	1.尝试添加变量嵌套支持。
-
  2010-10-12
 	1.添加简单的echo子命令。
 	2.添加call子命令(就是run命令)
@@ -85,7 +88,6 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	5.修改*的定义。(比较方便处理)
 	  *ADDR$ 从内存地址中取字符串。*ADDR取一个数值。
 	6.$$反义一个$(像批处理的%%),即两个$$处理时第一次会变成一个$,方便在for里面使用变量.
-
  2010-10-09
 	1.初步添加for命令，目前支持以下两种操作.并且允许嵌套。(仿 CMD 的 for 命令)
 	1). for /L $i IN (start,step,end) DO wenv-command
@@ -103,7 +105,6 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	  其中$0 是代表自身. $1-$9 分别是第1个－第9个参数.
 	这样可以配合for等命令实现一些强大的功能..
 	3.修正check命令比较数字的BUG.
-
  2010-10-08
 	1.修正cal ++VARIABLE没有成功的BUG。
 	2.修正比较符BUG。
@@ -114,7 +115,6 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	7."check" 命令增加一个功能，后面可以加一个WENV命令方便使用。并且可以check连用一个例子:
 	wenv set a=10
 	wenv check ${a}>=10 check ${a}<=20 run echo a is between 10 and 20
-
  2010-10-07
 	1.CALC支持自增/自减运算符++/--,和C语言的语法一样
 	例子,注意执行的顺序.
@@ -125,7 +125,6 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	2.支持按数字比较.
 		如果要比较的第一个串是一个数字就按数字进行比较.
 	3.数字比较时支持使用内存地址.*ADDR
-
  2010-10-05
 	1.修正calc命令除法计算的bug.
 	2.整合醉书生的修改版,并修复几个小bug.
@@ -133,7 +132,6 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  2010-10-04
 	1.添加字符串处理功能,和linux shell类似.
 		1).${VAR:x:y}  从x开始提取y个字符,如果x为负数则从倒数x个开始提取.
-
 		以下提取的内容都不包含STRING字符串.
 		2).${VAR#STRING}	删除STRING前面的字符。
 		3).${VAR##STRING} 删除STRING前面的字符，贪婪模式。
@@ -150,8 +148,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	2.解决当使用read可能导致出错的问题.
  */
 #include "grub4dos.h"
-#define DEBUG
-
+//#define DEBUG
 #define MAX_ARG_LEN 1024
 //用户可使用变量数
 #define MAX_USER_VARS 60
@@ -159,24 +156,23 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 #define MAX_VAR_LEN	8
 #define MAX_ENV_LEN	512
 #define MAX_BUFFER	(MAX_VARS * (MAX_VAR_LEN + MAX_ENV_LEN))
-
 // 变量保存地址
 #define BASE_ADDR 0x45000
 // 变量名
 #define VAR ((char (*)[MAX_VAR_LEN])BASE_ADDR)
 // 变量值
 #define ENVI ((char (*)[MAX_ENV_LEN])(BASE_ADDR + MAX_VARS * MAX_VAR_LEN))
-
+#define _WENV_ 60
+#define WENV_RANDOM (*(unsigned long *)(ENVI[_WENV_]+0x20))
 enum ENUM_CMD {CMD_HELP=-1, VAR_TIP=0, CMD_SET, CMD_GET, CMD_RESET, CMD_CALC, CMD_CALL, CMD_READ, CMD_CHECK, CMD_FOR, CMD_ECHO};
 // 缓冲
 static char arg_new[MAX_ARG_LEN];
 static int wenv_func(char *arg, int flags);		/* 功能入口 */
 static int wenv_help_ex(enum ENUM_CMD cmd);		/* 显示帮助 */
+static void trim_p(char **p_str);
 #define wenv_help()     wenv_help_ex(CMD_HELP)
-
 // 字符串比较
 static int grub_memcmp(const char *s1, const char *s2, int n);
-
 /* 
 arg比较来源字符串,string要对比的字符串.
 功能:
@@ -186,26 +182,29 @@ arg比较来源字符串,string要对比的字符串.
 */
 #define strcmp_ex(arg,string) grub_memcmp(arg,string,0)
 static char *strstrn(const char *s1, const char *s2, const int n);	// 查找子串
-
 // 环境变量功能函数
 static int envi_cmd(const char *var, char * const env, int flags);
 #define set_envi(var, val)			envi_cmd(var, val, 0)
 #define get_env(var, val)			envi_cmd(var, val, 1)
 #define get_env_all()				envi_cmd(NULL, NULL, 2)
 #define reset_env_all()				envi_cmd(NULL, NULL, 3)
+#define STATUS_AND	1
+#define STATUS_OR		2
+#define STATUS_ELSE	4
+#define STATUS_NONE	0
+static int replace_str(char *in, char *out, int flags);	// 变量替换, 主要功能函数,低16位最大长度，高16位标志。
 
-static int replace_str(char *in, char *out, int flags);	// 变量替换, 主要功能函数
+#define REPLACE_RTRIM	0x40000
+#define REPLACE_LTRIM	0x80000
+#define REPLACE_DEFAULT (REPLACE_RTRIM | REPLACE_LTRIM)
+
 static int read_val(char **str_ptr,unsigned long long *val);	// 读取一个数值(用于计算器)
-
-
 static int ascii_unicode(const char *ch, char *addr);	// unicode编码转换
-
 static void lower(char *string);			// 小写转换
 static void upper(char *string);			// 大写转换
 static char* next_line(char *arg, char eol);				// 读下一命令行
 static int strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 static int printfn(char *str,int n);				//最多显示n个字符
-
 //子命令集
 static int set_func(char *arg,int flags);
 static int get_func(char *arg,int flags);
@@ -216,9 +215,7 @@ static int call_func(char *arg,int flags);
 static int check_func(char *arg,int flags);
 static int for_func(char *arg, int flags);
 static int echo_func(char *arg, int flags);
-
 static int replace(char *str ,const char *sub,const char *rep);
-
 int t = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
@@ -230,20 +227,19 @@ static struct cmd_list
   int flags;			//标志
 } *p_cmd_list = NULL;
 asm(".long 0x534F4434");
-
 /* a valid executable file for grub4dos must end with these 8 bytes */
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");
-
 /* thank goodness gcc will place the above 8 bytes at the end of the b.out
  * file. Do not insert any other asm lines here.
  */
-
-int main()
+static int main(char *arg,int flags)
 {
-	void *p = &main;
-	char *arg = p - (*(int *)(p - 8));
-	int flags = (*(int *)(p - 12));
+	if (*(int *)0x8278 < 20101118)
+	{
+		printf("grub4dos version does not support\n");
+		return 0;
+	}
 	struct cmd_list wenv_cmd[12]=
 	{
 		"set",
@@ -278,90 +274,126 @@ int main()
 		0
 	}; //必须在程序中进行初始化
 	p_cmd_list = wenv_cmd;
-	return wenv_func (arg , flags);
-}
-
-static int wenv_func(char *arg, int flags)
-{
 	if (p_cmd_list == NULL)
-	return ! (errnum = ERR_WONT_FIT);
+		return ! (errnum = ERR_WONT_FIT);
 	if( ! *arg || arg == NULL )
 		return wenv_help();
-
-	int i;
-	int ret = 0;
-	if( 0 != strcmp_ex(VAR[60], "?_WENV") )// 检查默认变量
+	if( 0 != strcmp_ex(VAR[_WENV_], "?_WENV") )// 检查默认变量
 		reset_env_all();
-	
-
-	
+	return wenv_func (arg , flags);
+}
+static char *check_Brackets(const char *arg)
+{
+	const char *p = arg++;
+	int i = 1;
+	while (i && *++p)//end of *p is ')'
+	{
+		if (*p == '(')
+			i++;
+		else if (*p == ')')
+			i--;
+		else if (*p == '\"')
+		{
+			while (*++p && *p != '\"')
+				;
+		}
+	}
+	if (i != 0 )
+	{
+		return NULL;
+	}
+	return (char *)p;
+}
+static char *skip_to_next_cmd (char *cmd,int *status,int flags)
+{
+	*status = 0;
+	if (cmd == NULL || *cmd == 0)
+		return NULL;
+	while (*cmd)
+	{
+		if (*cmd == '(')
+			cmd = check_Brackets(cmd);
+		cmd = skip_to (0, cmd);
+		switch (*(unsigned int *)cmd)
+		{//&=0x26;|=0x7c;]=0x5d;!=0x21; ;=0x3b
+			case 0x20265d5d://	operator AND "]]&"
+				*status = STATUS_AND;
+				break;
+			case 0x207c5d5d://	operator OR "]]|"
+				*status = STATUS_OR;
+				break;
+			case 0x20215d5d://	]]!
+				*status = STATUS_ELSE;
+				break;
+			default:
+				if (*(unsigned short *)cmd != 0x203b)
+					continue;
+				*status = STATUS_NONE;
+				break;
+		}
+		*(cmd - 1) = '\0';
+		cmd = skip_to (0, cmd);
+		if (flags == 0 || *status == flags)
+		{
+			break;
+		}
+	}
+	return cmd;
+}
+static int wenv_func(char *arg, int flags)
+{
 	char *p = arg;
 	char *p1;
-	while (*p)
+	int ret = 0;
+	int status = 0;
+
+	while ( *p && (arg = p) != NULL)
 	{
-		char cmd_buff[MAX_ENV_LEN + 1] = "\0";
-		
 		if (*arg == '(')
 		{
-			*arg = ' ';
-			p1 = arg;
-			i = 1;
-			while(i && *++p1)
-			{
-				if (*p1 == '(')
-					i++;
-				if (*p1 == ')')
-					i--;
-			}
-			if (i) return 0;
-			*p1++ = ' ';
+			p = check_Brackets(arg);
+			if (p == NULL)
+				return !(errnum = ERR_BAD_ARGUMENT);
+			*p++ = '\0';
+			p = skip_to_next_cmd(p,&status,STATUS_NONE);
+			ret = wenv_func(++arg,flags);
 		}
-		
-		while (*(p = skip_to(0,p)))
+		else
 		{
-			if (*(short *)p == 0x203B)
+			int i;
+			char cmd_buff[MAX_ENV_LEN + 1] = "\0";
+			p = skip_to_next_cmd(arg,&status,STATUS_NONE);
+			replace_str(arg,cmd_buff,REPLACE_DEFAULT | MAX_ENV_LEN); //替换变量
+			arg = cmd_buff;
+			for (i=0;p_cmd_list[i].name != NULL ;i++)
 			{
-				*(p-1) = '\0';
-				p = skip_to (0,p);
-				break;
-			}
-			if (*p == '(')
-			{
-				i = 1;
-				while (i && *++p)
+				if (strcmp_ex(arg, p_cmd_list[i].name) == 0)
 				{
-					if (*p == '(')
-						i++;
-					if (*p == ')')
-						i--;
+					arg = skip_to(0, arg);
+					if((unsigned char)*arg < (unsigned char)p_cmd_list[i].flags)
+						return wenv_help_ex(p_cmd_list[i].flags >> 8);
+					break;
 				}
-				if (i) return 0;
 			}
-		}
-
-		replace_str(arg,cmd_buff,1); //替换变量
-		arg = cmd_buff;
-		#ifdef DEBUG
-		if (debug >1)
-			printf("Debug:%s\n",arg);
-		#endif
-
-		for (i=0;p_cmd_list[i].name != NULL ;i++)
-		{
-			if (strcmp_ex(arg, p_cmd_list[i].name) == 0)
+			if (p_cmd_list[i].func == NULL)
 			{
-				arg = skip_to(0, arg);
-				if((unsigned char)*arg < (unsigned char)p_cmd_list[i].flags)
-					return wenv_help_ex(p_cmd_list[i].flags >> 8);
-				ret = p_cmd_list[i].func(arg,flags);
-				break;
+				if (debug == 2)
+					printf("Arg:%s\n",arg);
+				return !(errnum = ERR_BAD_ARGUMENT);
 			}
+			ret = p_cmd_list[i].func(arg,flags);
 		}
-		arg = p;
+		if (status == STATUS_NONE)
+			continue;
+		if (status == STATUS_ELSE)
+			break;
+		errnum = 0;
+		if (((status == STATUS_AND) && ret) || ((status == STATUS_OR) && ret == 0))
+			continue;
+		p = skip_to_next_cmd(p,&status,STATUS_ELSE);
 	}
 	return ret;
 }
-
 static int set_func(char *arg,int flags)
 {
 	if(*arg < 'A')
@@ -392,23 +424,18 @@ static int set_func(char *arg,int flags)
 		#endif
 		var[i] = *arg++;
 	}
-
 	while(*arg == ' ') arg++;//过滤空格
-
 	if (*arg == '\0') //后面没有"="
 	{
 		return envi_cmd(var,NULL,2);
 	}
-
 	if (*arg != '=')//变量后面不是'='
 	{
 		return wenv_help_ex(1);
 	}
-
 	arg = skip_to(1, arg);
 	if(! *arg)
 		return set_envi(var, NULL); //值为空清除变量
-
 	int ucase=0;
 	if (*arg=='$')
 	{
@@ -425,7 +452,6 @@ static int set_func(char *arg,int flags)
 			while (*arg == ',' || *arg == ' ' || *arg == '\t') arg++;
 		}
 	}
-
 	//memset(value, 0, MAX_ENV_LEN);
 	if (grub_memcmp(arg, "$input,", 7) == 0)
 	{
@@ -437,27 +463,21 @@ static int set_func(char *arg,int flags)
 		get_cmdline_str.echo_char = 0;
 		get_cmdline_str.readline = 1;
 		if (get_cmdline(get_cmdline_str))
-		return 0;
-	}
-	else
-	{
-		if (!replace_str(arg,value,1))
 			return 0;
+		arg = value;
 	}
 
 	if (ucase == 1)
-		upper(value);
+		upper(arg);
 	else if (ucase == 2)
-		lower(value);
-
-	if( set_envi(var, value) )
+		lower(arg);
+	if( set_envi(var, arg) )
 	{
 		return 1;
 	}
 	else
 		return 0;
 }
-
 static int get_func(char *arg,int flags)
 {
 	int i;
@@ -469,12 +489,9 @@ static int get_func(char *arg,int flags)
 		if ((arg[i] == '=') || (arg[i] < '0')) break;
 		t_var[i] = arg[i];
 	}
-
 	if (arg[i] == '*') //显示包含指定字符的变量
 	return envi_cmd(t_var,NULL,2);
-
 	if (arg[i] && arg[i] != '=' && arg[i] != ' ') return 0;//超长
-
 	if(get_env(t_var, arg_new))
 	{
 		arg=skip_to(1,(char *)arg);
@@ -496,52 +513,17 @@ static int get_func(char *arg,int flags)
 	}
 	return 0;
 }
-
 static int call_func(char *arg,int flags)
 {
 	int ret;
-	char *p = arg;
 	char *cmd = arg;
-	while (p = strstr(p,"]]"))
-	{
-		if (p[2] == '&' || p[2] == '|' || p[2] == ']')
-		{
-			*p=0;
-			p += 2;
-			arg = skip_to(0,cmd);
-			nul_terminate(cmd);
-			ret = builtin_cmd(cmd, arg, flags);
-			errnum = 0;
-			if ((*p == '&' && ret) || (*p == '|' && ! ret) || *p == ']')
-			{
-				p++;
-				while (*p == ' ' || *p == '\t') p++;
-				  cmd = p;
-				continue;
-			}
-			else 
-			{
-				sprintf(arg_new,"0x%X",ret);
-				set_envi ("?_WENV",arg_new);
-				return ret;
-			}
-		}
-		else
-		{
-			p += 2;
-			continue;
-		}
-	}
-
-	arg = skip_to(0,cmd); /* 取得参数部份 */
-	nul_terminate(cmd); /* 取得命令部份 */
+	char tmp_buf[20];
+	arg = skip_to (0, cmd);				// 取得参数部份
+	nul_terminate(cmd); 					// 取得命令部份
 	ret = builtin_cmd(cmd, arg, flags);
-	if (errnum) return 0;
-	sprintf(arg_new,"0x%X",ret);
-	set_envi ("?_WENV",arg_new);
+	sprintf(ENVI[_WENV_], "0x%X", ret);
 	return ret;
 }
-
 static int reset_func(char *arg,int flags)
 {
 	if (*arg == '\0') return reset_env_all();
@@ -562,7 +544,6 @@ static int reset_func(char *arg,int flags)
 			printf(" VARIABLE illegally\n\n");
 		return 0;
 	}
-
 	if (arg[i] == '*') //按前缀清除
 	{
 		int j, count=0;
@@ -583,16 +564,13 @@ static int reset_func(char *arg,int flags)
 		return set_envi(arg, NULL);
 	}
 }
-
 static int check_func(char *arg,int flags)
 {
-	//char arg_tmp[MAX_ARG_LEN + 1];
 	unsigned int op=-1; // 0:==, 1:<>, 2:>=, 3:<=, 判断优先级从小到大
 	int i;
 	char *p1,*p2;
-	//replace_str(arg, arg_tmp, 1);//二次替换
-	p1 = arg;
 
+	p1 = arg;
 	p2 = p1;
 	while(*p2)
 	{
@@ -622,6 +600,9 @@ static int check_func(char *arg,int flags)
 			case 0x3D3C://<=
 				op = 3;
 				break;
+			case 0x2D3C://<-
+				op = 4;
+				break;
 			default:
 				p2++;
 				continue;
@@ -647,15 +628,23 @@ static int check_func(char *arg,int flags)
 	{
 		;
 	}
+
+	arg = skip_to(0, p2);
+	trim_p(&p1);
+	trim_p(&p2);
 	#ifdef DEBUG
 		printf("%s <==> %s\n",p1,p2);
 	#endif
 	long long v1 = 0LL,v2=0LL;
-	if ( !read_val(&p1,&v1) || !read_val(&p2,&v2) ) // 读数字失败就按字符串比较
+	if(op == 4)
+	{
+		if( p1 = strstr(p2, p1))
+		sprintf(ENVI[_WENV_], "0x%X", (p1 == NULL)? -1 : (int)(p1-p2));
+	}
+	else if ( !read_val(&p1,&v1) || !read_val(&p2,&v2) ) // 读数字失败就按字符串比较
 	{
 		v1 = 0LL;
 		v2 = grub_memcmp (p2, p1, 0);
-		p2 = skip_to (0, p2);
 	}
 	/* 不需要，因为read_val函数就已经过滤掉空格了
 	else
@@ -663,7 +652,6 @@ static int check_func(char *arg,int flags)
 		while (*p2 == ' ') p2++;
 	}
 	*/
-	printf("tt:%s",p2);
 	errnum = 0; //清除错误信息
 	switch(op)
 	{
@@ -679,13 +667,14 @@ static int check_func(char *arg,int flags)
 		case 3:
 			i = (v1 <= v2);
 			break;
+		case 4:
+			i = (p1 != NULL);
+			break;
 	}
-
-	if (*p2 == '\0' || !i) //如果后面没有参数或者返回真为假，直接返回。
+	if (*arg == '\0' || !i) //如果后面没有参数或者返回真为假，直接返回。
 		return i;
-	return wenv_func(p2,flags);
+	return wenv_func(arg,flags);
 }
-
 static int replace(char *str ,const char *sub,const char *rep)
 {
 	char _buff[MAX_ENV_LEN];
@@ -729,7 +718,6 @@ static int replace(char *str ,const char *sub,const char *rep)
 	*str = '\0';
 	return 1;
 }
-
 //删除字符串前后的空格和引号
 static void trim_p(char **p_str)
 {
@@ -739,13 +727,11 @@ static void trim_p(char **p_str)
 	if (**p_str == '\"') *(*p_str)++;
 	p = *p_str;
 	while (*p) p++;
-
 	while (*--p == ' ');
 	if (*p == '\"') p--;
 	p[1] = '\0';
 	return;
 }
-
 static int split_ex(char *str,char *delims,char **result,int tokens)
 {
 	if (*str == 0 || str == NULL || result == NULL)
@@ -757,7 +743,6 @@ static int split_ex(char *str,char *delims,char **result,int tokens)
 	}
 	char *p;
 	char *s = str;
-
 	p = delims;
 	while (*p) //过滤字符前面的分隔符号。
 	{
@@ -768,7 +753,6 @@ static int split_ex(char *str,char *delims,char **result,int tokens)
 		}
 		p++;
 	}
-
 	if (tokens & 1) //设置第一个变量
 	{
 		*result++ = s++;
@@ -802,7 +786,6 @@ static int split_ex(char *str,char *delims,char **result,int tokens)
 	}
 	return 1;
 }
-
 static int for_func(char *arg, int flags)
 {
 	char *p;
@@ -823,7 +806,6 @@ static int for_func(char *arg, int flags)
 	else return 0;
 	
 	arg = skip_to (0,arg);
-
 	if ((x & 2) && *arg == '\"')	//字符串分隔，设定提取参数
 	{
 		int i;
@@ -917,7 +899,6 @@ static int for_func(char *arg, int flags)
 	sub[2] = '\0';
 	if (strcmp_ex(arg, "in") != 0)	//关键字in
 		return !(errnum = ERR_BAD_ARGUMENT);
-
 	arg = skip_to(0, arg);
 	if (*arg++ != '(')
 		return !(errnum = ERR_BAD_ARGUMENT);
@@ -934,7 +915,6 @@ static int for_func(char *arg, int flags)
 	if (*cmd-- != ')')
 		return !(errnum = ERR_BAD_ARGUMENT);
 	if (*check_sub == eol[1]) *cmd = 0;
-
 	cmd = skip_to(0,arg);	//设置要执行命令开始的指针
 	if (*cmd == '\0') return !(errnum = ERR_BAD_ARGUMENT);
 	
@@ -966,7 +946,6 @@ static int for_func(char *arg, int flags)
 	{
 		char *f_buf = (char*)0x610000; //默认文件读取缓存位置
 		char *p1;
-
 		if (*check_sub == eol[1])
 			f_buf = ++check_sub;
 		else
@@ -985,12 +964,10 @@ static int for_func(char *arg, int flags)
 			char *s[10] = {NULL};	//临时变量，当前允许9个.%i %j %k
 			int i;
 			char t_sub[3] = {'%',sub[1]};
-
 			//t_sub[1] = sub[1];
 			p1 = next_line(f_buf, eol[0]);
 			strcpyn(command_buff,cmd,MAX_ENV_LEN); //复制命令到缓冲区，因为要对命令进行字符串替换
 			split_ex(f_buf,delims,s,tokens);//分隔字符串.
-
 			for (i = 0;s[i];i++)
 			{
 				#ifdef DEBUG
@@ -1002,7 +979,6 @@ static int for_func(char *arg, int flags)
 					return 0;
 				t_sub[1]++;//下一个临时变量字符
 			}
-
 			ret = wenv_func(command_buff ,flags);
 			if (errnum)
 				return !errnum;
@@ -1011,7 +987,6 @@ static int for_func(char *arg, int flags)
 	}
 	return ret;
 }
-
 static int echo_func(char *arg, int flags)
 {
 	int i = 512;
@@ -1037,7 +1012,6 @@ static int echo_func(char *arg, int flags)
 	}
 	return 1;
 }
-
 static int wenv_help_ex(enum ENUM_CMD cmd)
 {
 	switch(cmd)
@@ -1086,7 +1060,6 @@ static int wenv_help_ex(enum ENUM_CMD cmd)
 	}
 	return 0;
 }
-
 static int var_expand(char **arg, char **out)
 {
 	if (**arg != '{' || arg == NULL)
@@ -1127,7 +1100,6 @@ static int var_expand(char **arg, char **out)
 			}
 			else
 				str_flag = 2;
-
 			//if (*p == '*') p++;
 			start = (long long)(int)p;//设定起始位置(保存的是一个指针数值)
 			len = 0;//字符串长度,后面需要跳过这些字符.
@@ -1147,7 +1119,6 @@ static int var_expand(char **arg, char **out)
 			}
 			else
 				str_flag = 5;
-
 			start = (long long)(int)p;//设定起始位置(保存的是一个指针数值);
 			while (*p && *p != '}') p++;//跳过后面的字符
 			//if (*(p-1) == '*') *(p-1) = '\0'; //截断
@@ -1159,9 +1130,7 @@ static int var_expand(char **arg, char **out)
 		}
 		ch[i] = *p++;
 	}
-
 	errnum = 0;
-
 	if (*p == '$' && p[1] == '{')
 	{
 		char *p1 = value;
@@ -1180,7 +1149,6 @@ static int var_expand(char **arg, char **out)
 					i--;
 				*p1++ = *p;
 			}
-
 			*arg = p;
 			p1 = value;
 			return var_expand(&p1,out);
@@ -1215,12 +1183,10 @@ static int var_expand(char **arg, char **out)
 			p++;
 		}
 	}
-
 	if (*p != '}')
 	{
 		return 0;
 	}
-
 	*arg = p;
 	value[0] = '\0';//简易初始化.
 	if (get_env(ch,value) || (str_flag & 8))
@@ -1277,24 +1243,36 @@ static int var_expand(char **arg, char **out)
 	#endif
 	return 1;
 }
-
 static int replace_str(char *in, char *out, int flags)
 {
 	if (out == arg_new)
 	{
 		memset(out, 0, MAX_ARG_LEN);
 	}
-	if (flags) while (*in == ' ') in++;//忽略前面的空格
+	unsigned int max_len = flags & 0xFFFF;
+	if (max_len == 0)
+		max_len = MAX_ENV_LEN;
+	if (flags & REPLACE_LTRIM)
+		while (*in == ' ') in++;//忽略前面的空格
+
 	char *po = out;
 	char *p = in;
 	int i;
 	unsigned long long addr;
 	char ch[MAX_VAR_LEN + 1]="\0";
 	char value[MAX_ENV_LEN + 1];
-	while (*in && out - po < MAX_ENV_LEN)
+	while (*in && out - po <= max_len)
 	{
 		switch(*(p = in))
 		{
+			case '\"':
+				p++;
+				if (*p == '\"')
+				{
+					in++;
+				}
+				*out++ = *in++;
+				break;
 			case '*':
 				p++;
 				if (! safe_parse_maxint (&p, &addr) || *p != '$')
@@ -1319,139 +1297,25 @@ static int replace_str(char *in, char *out, int flags)
 					in = ++p;
 				else
 					*out++ = *in++;
-				#if 0
-				p += 2;
-				
-				long long start = 0LL;//提取字符起始位置
-				long long len = 0xFFFFFFFFULL;//提取字符串长度
-				int str_flag = 0;
-				str_flag = 0;
-				memset(ch,0,MAX_VAR_LEN);
-				for (i=0;i<MAX_VAR_LEN+1;i++)
-				{
-					if (*p == '}') //提取变量成功.
-					{
-						break;
-					}
-					else if (*p == ':') //截取指定长度字符串关键字符
-					{
-						p++;
-						if (! safe_parse_maxint (&p, &start)) //起始位置
-						{
-							break;//不符合要求,则不处理.如果后面刚好是一个"}"则相当于过滤掉了":"
-						}
-						if (*p == ':' && (p++,! safe_parse_maxint (&p, &len)))//长度,非必要的
-						{
-							break;//同上
-						}
-						break;//不再判断,直接退出.
-					}
-					else if (*p == '#')
-					{
-						if (*++p == '#')
-						{
-							p++;
-							str_flag = 3;
-						}
-						else
-							str_flag = 2;
-
-						//if (*p == '*') p++;
-						start = (long long)(int)p;//设定起始位置(保存的是一个指针数值)
-						len = 0;//字符串长度,后面需要跳过这些字符.
-						while (*p && *p != '}')//跳过后面的字符
-						{
-							len++;
-							p++;
-						}
-						break;
-					}
-					else if (*p == '%')
-					{
-						if (*++p == '%')
-						{
-							str_flag = 4;
-							p++;
-						}
-						else
-							str_flag = 5;
-
-						start = (long long)(int)p;//设定起始位置(保存的是一个指针数值);
-						while (*p && *p != '}') p++;//跳过后面的字符
-						//if (*(p-1) == '*') *(p-1) = '\0'; //截断
-						break;
-					}
-					else if (*p < '0' || i >= MAX_VAR_LEN) //非法字符或变量超过8个字符
-					{
-						break;
-					}
-					ch[i] = *p++;
-				}
-				errnum = 0;
-				if (*p != '}')
-				{
-					*out++ = *in++;
-					continue;
-				}
-				*p = '\0'; //截断
-				in = ++p;
-				
-				memset(value,0,MAX_ENV_LEN+1);
-				if (get_env(ch,value))
-				{
-					if (str_flag)
-					{
-						if (! (p = strstrn(value, (char *)(int)start, str_flag & 1)))
-							continue;
-						if (str_flag & 4)
-						{
-							len = p - value;
-							p = value;
-						}
-						else
-						{
-							p += len;
-							len = 0xFFFFFFFF;
-						}
-					}
-					else
-					{
-						int str_len = strlen(value);
-						if (start < 0LL) start += str_len;//确定起始位置
-						if (len < 0LL) len += str_len - start;//确定结束位置
-						p = value + start;
-					}
-
-					while (*p && len >0)
-					{
-						*out++ = *p++;
-						len--;
-					}
-				}
-				#endif
 				break;
-
 			default:/* 默认不替换直接复制字符*/
 				*out++ = *in++;
 				break;
 		}
 	}
-	if (flags)
+	out--;
+	if (flags & REPLACE_RTRIM)
 	{
-		while(*--out == ' ') //删除后面的空格
+		while(*out == ' ') //删除后面的空格
 		{
-			;
+			out--;
 		}
-		out++;
 	}
-	*out = '\0'; //截断
-	#ifdef DEBUG
-		if (debug > 1)
-			printf("replace_str:%s\n",po);
-	#endif
-	return *po;
-}
+	
+	out[1] = '\0'; //截断
 
+	return 1;
+}
 static int strcpyn(char *dest,const char *src,int n)
 {
 #ifdef DEBUG
@@ -1471,7 +1335,6 @@ static int strcpyn(char *dest,const char *src,int n)
 	*dest = '\0';
 	return (int)(src-p);
 }
-
 static int envi_cmd(const char *var,char * const env,int flags)
 {
 #ifdef DEBUG
@@ -1482,7 +1345,6 @@ static int envi_cmd(const char *var,char * const env,int flags)
 	}
 #endif
 	//	char ch[MAX_VAR_LEN]="\0";
-
 	if(flags == 3)//重置
 	{
 		#ifdef DEBUG
@@ -1490,13 +1352,12 @@ static int envi_cmd(const char *var,char * const env,int flags)
 		#else
 		memset( (char *)BASE_ADDR, 0, MAX_BUFFER );
 		#endif
-	sprintf(VAR[60], "?_WENV");
+		sprintf(VAR[_WENV_], "?_WENV");
 		return 1;
 	}
 	int i, j;
 	char ch[MAX_VAR_LEN +1] = "\0"; //使用ch中转可以保证字符截取正确.
 	strcpyn(ch,var,MAX_VAR_LEN);
-
 	if (flags == 2)//显示所有变量信息或包含指定字符的变量
 	{
 		int count=0;
@@ -1524,7 +1385,6 @@ static int envi_cmd(const char *var,char * const env,int flags)
 					  putchar(VAR[i][j]);
 			while(j++<=MAX_VAR_LEN) putchar(' ');
 			#endif
-
 			putchar('=');
 			j = printfn(ENVI[i],60);
 			#if 0
@@ -1535,25 +1395,47 @@ static int envi_cmd(const char *var,char * const env,int flags)
 			if (ENVI[i][j]) printf(" ...");//如果要显示的字符太长了只显示60个字符.
 			putchar('\n');
 		}
-
 		if (var != NULL && count == 0)
 		{
 			printf(" Variable %s not defined\n",var);
 			return 0;
 		}
-
 		printf("\t  counts = %d", count);
 		if( NULL == var)
 			printf("    max = %d", MAX_USER_VARS);
 		return 1;
 	}
-
 	j = 0xFF;
 	/*遍历变量名表
 	注: 添加 VAR[i][0] 判断,还有使用删除标记符"@"
 		使用得我们不需要遍历整个表.
 		//60以上有变量系统保留。
 	*/
+	if (ch[0]=='@')
+	{
+		unsigned long date,time;
+		get_datetime(&date, &time);
+		/*
+		sprintf(WENV_DATE,"%04X-%02X-%02X",(date >> 16),(char)(date >> 8),(char)date);
+		sprintf(WENV_TIME,"%02X:%02X:%02X",(char)(time >> 24),(char)(time >> 16),(char)(time>>8));
+		*/
+		if (memcmp(ch,"@DATE",6) == 0)
+		{
+			sprintf(env,"%04X-%02X-%02X",(date >> 16),(char)(date >> 8),(char)date);
+		}
+		else if (memcmp(ch,"@TIME",6) == 0)
+		{
+			sprintf(env,"%02X:%02X:%02X",(char)(time >> 24),(char)(time >> 16),(char)(time>>8));
+		}
+		else if (memcmp(ch,"@RANDOM",8) == 0)
+		{
+			WENV_RANDOM   =   (((WENV_RANDOM * time + date ) >> 16) & 0x7fff);
+			sprintf(env,"%d",WENV_RANDOM);
+		}
+		else
+			return 0;
+		return 1;
+	}
 	for(i=(ch[0]=='?')?60:0;i < MAX_VARS && VAR[i][0];i++)
 	{
 		if (memcmp(VAR[i], ch, MAX_VAR_LEN) == 0)//找到了
@@ -1561,7 +1443,6 @@ static int envi_cmd(const char *var,char * const env,int flags)
 			j = i;//如果完全匹配设置j = 1并退出循环,这时j会等于i,其它情况都不可能相等.
 			break;
 		}
-
 		if (j == 0xFF && VAR[i][0] == '@') j = i;//记录一个可设变量的位置,如果是添加新的变量时使用.
 	}
 	
@@ -1575,7 +1456,6 @@ static int envi_cmd(const char *var,char * const env,int flags)
 		}
 		return 0;
 	}//如果flags = 1到这里就结束了,直接返回,后面不以不需要再判断.
-
 	if (j == 0xFF && i >= MAX_VARS) //没有可用空间也没有找到匹配的记录.
 	{
 		if( debug > 0 ) // 这里最好给用户一个提示
@@ -1602,7 +1482,6 @@ static int envi_cmd(const char *var,char * const env,int flags)
 	memmove(ENVI[i],env,MAX_ENV_LEN);
 	return 1;
 }
-
 static int read_val(char **str_ptr,unsigned long long *val)
 {
 		while (**str_ptr == ' ' || **str_ptr == '\t') (*str_ptr)++;
@@ -1615,7 +1494,6 @@ static int read_val(char **str_ptr,unsigned long long *val)
 			str_ptr1 = arg;
 			arg += 2;
 		}
-
 		if (*arg == '*')
 		{
 			p = arg;
@@ -1660,7 +1538,6 @@ static int read_val(char **str_ptr,unsigned long long *val)
 		*str_ptr = arg;
 		return (int)val_ptr;
 }
-
 static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
 {
 	int i;
@@ -1678,7 +1555,6 @@ static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
 			val_tmp = -1LL;
 		p += 2;
 	}
-
 	if (*p == 0 || *p == '=' || (unsigned char)(*p - '0') < 9)
 		return 0;
 	for (i=0;i<MAX_VAR_LEN;i++)
@@ -1690,7 +1566,6 @@ static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
 	p1 = &envi[8];
 	get_env(envi,p1);
 	read_val(&p1,val);
-
 	if (val_tmp != 0LL) //计算++X
 	{
 		*val += val_tmp;
@@ -1712,7 +1587,6 @@ static int read_envi_val(char **str_ptr,char *envi,unsigned long long *val)
 	*str_ptr = p;
 	return 1;
 }
-
 static int calc_func (char *arg,int flags)
 {
 	#ifdef DEBUG
@@ -1741,7 +1615,6 @@ static int calc_func (char *arg,int flags)
 		}
 	}
 	while (*arg == ' ') arg++;
-
 	if (*arg == '=')
 	{
 		arg++;
@@ -1761,7 +1634,6 @@ static int calc_func (char *arg,int flags)
 		val2 = 0ULL;
 		O = *arg;
 		arg++;
-
 		if (O == '>' || O == '<')
 		{
 	 if (*arg != O)
@@ -1771,7 +1643,6 @@ static int calc_func (char *arg,int flags)
 		
 		if (read_val(&arg, &val2) == 0 && read_envi_val(&arg,envi,&val2) == 0)
 	 return 0;
-
 		switch(O)
 		{
 	 case '+':
@@ -1821,7 +1692,6 @@ static int calc_func (char *arg,int flags)
 	errnum = 0;
 	return *p_result;
 }
-
 static int ascii_unicode(const char *ch,char *addr)
 {
 	int i = 0;
@@ -1837,7 +1707,6 @@ static int ascii_unicode(const char *ch,char *addr)
 #endif
 	return 1;
 }
-
 // 小写转大写
 static void upper(char *string)
 {
@@ -1851,7 +1720,6 @@ static void upper(char *string)
 	}
 	return;
 }
-
 static void lower(char *string)
 {
 	while (*string)
@@ -1864,7 +1732,6 @@ static void lower(char *string)
 	}
 	return;
 }
-
 /* 比较字符串前n个字符(s1不分大小写), 相等返回0
  * n>0 时，仅比较前n具字符
  * n=0 时，s1须以结束符、空格、制表符、等号分隔才会返回相等的结果
@@ -1884,7 +1751,6 @@ static int grub_memcmp(const char *s1, const char *s2, int n)
 	}
 #endif
 	int len = (n>0) ? n : strlen(s2);
-
 	while(len--)
 	{
 		if  (*s1 == * s2 || ((unsigned char)(*s1 - 'A') < 26 && (*s1 | 32) == *s2))
@@ -1895,14 +1761,11 @@ static int grub_memcmp(const char *s1, const char *s2, int n)
 		}
 		else return (*s1 > *s2)?1:-1;
 	}
-
 		// 前面len字节已匹配，如n=0作额外的结束符检查
 	if (n != 0 || (*s1 == '\0' || *s1 == ' ' || *s1 == '\t' || *s1 == '='))
 		return 0;
-
 	return 1;
 }
-
 /*
 	static char *strstrn(const char *s1,const char *s2,const int n)
 	功能：从字符串s1中寻找s2的位置（不比较结束符NULL).
@@ -1917,7 +1780,6 @@ static char *strstrn(const char *s1,const char *s2,const int n)
 		return NULL;
 	}
 #endif
-
 	int len1 = strlen(s1);
 	int len2 = strlen(s2);
 	if( len1 < len2 )
@@ -1934,7 +1796,6 @@ static char *strstrn(const char *s1,const char *s2,const int n)
 	} while( NULL == (s=(strstr(p, s2))) && p > s1 );
 	return s;
 }
-
 static int printfn(char *str,int n)
 {
 	int i = 0;
@@ -1945,7 +1806,6 @@ static int printfn(char *str,int n)
 	}
 	return i;
 }
-
 static char* next_line(char *arg, char eol)
 {
 	char *P=arg;
@@ -1974,11 +1834,9 @@ static int read_func(char *arg,int flags)
 		return 0;
 	if(filemax > 32*1024+512)	// 限制文件大小不能超过32KB+512字节
 		return 0;
-
 	char *P=(char *)0x600000;	// 6M
 	char *P1;
 	char command_buff[MAX_ENV_LEN]; //命令行缓存
-
 	if (read((unsigned long long)(unsigned int)P,-1,GRUB_READ) != filemax)
 		return 0;
 	close();
@@ -1986,7 +1844,6 @@ static int read_func(char *arg,int flags)
 	P[filemax] = 0;
 	char *s[11] = {NULL};
 	int i,j;
-
 	s[0] = arg;
 	for (i=0;i<9;i++)
 	{
@@ -1996,13 +1853,10 @@ static int read_func(char *arg,int flags)
 		for (j=1;*(arg-j) == ' ';j++) //截断
 	 ;
 		*(arg-j+1) = '\0';
-
 		s[i+1] = arg;
 	}
-
 	if( *P == ':' )
 		 P = next_line(P,':');
-
 	int ret;
 	char sub[3] = "$0";
 	while (*P)
@@ -2017,9 +1871,12 @@ static int read_func(char *arg,int flags)
 		}
 		ret = wenv_func (command_buff,flags);
 		if (errnum)
-	 break;
+		{
+			if (debug == 2)
+				printf("command:%s\n",command_buff);
+			break;
+		}
 		P = P1;
 	}
-
 	return ret;
 }
