@@ -294,6 +294,7 @@ static int main(char *arg,int flags)
 		return wenv_help();
 	if( 0 != strcmp_ex(VAR[_WENV_], "?_WENV") )// 检查默认变量
 		reset_env_all();
+	printf("wenv_arg:%s\n",arg);
 	return wenv_func (arg , flags);
 }
 static char *check_Brackets(const char *arg)
@@ -348,6 +349,7 @@ static char *skip_next (int flags,char *arg)
 		{
 			while (*++arg && *arg != QUOTE_CHAR)
 				;
+			continue;
 		}
 		/*
 		else if ((flags & 2) && *arg == '\\')
@@ -415,7 +417,6 @@ static int wenv_func(char *arg, int flags)
 	int ret = 0;
 	int status = 0;
 	wenv_flags = 0;
-
 	while ( *p && (arg = p) != NULL)
 	{
 		if (*arg == '(')
@@ -430,7 +431,7 @@ static int wenv_func(char *arg, int flags)
 		else
 		{
 			#ifdef DEBUG
-				printf("arg:%s\n",arg);
+				printf("wenv_arg:%s\n",arg);
 			#endif
 			int i;
 			char cmd_buff[MAX_ENV_LEN + 1] = "\0";
@@ -450,7 +451,7 @@ static int wenv_func(char *arg, int flags)
 			if (p_cmd_list[i].func == NULL)
 			{
 				if (debug == 2)
-					printf("Arg:%s\n",arg);
+					printf("wenv_arg:%s\n",arg);
 				return !(errnum = ERR_BAD_ARGUMENT);
 			}
 			ret = p_cmd_list[i].func(arg,flags);
@@ -470,6 +471,9 @@ static int set_func(char *arg,int flags)
 {
 	if(*arg < 'A')
 		return get_env_all();
+	#ifdef DEBUG
+	printf("wenv_set:%s:\n",arg);
+	#endif
 	int i;
 	char var[MAX_VAR_LEN+1] = "\0";
 	char value[MAX_ENV_LEN + 1] = "\0";
@@ -546,6 +550,7 @@ static int set_func(char *arg,int flags)
 		upper(arg);
 	else if (ucase == 2)
 		lower(arg);
+	printf("%s=%s\n",var,arg);
 	if( set_envi(var, arg) )
 	{
 		return 1;
@@ -630,7 +635,9 @@ static int reset_func(char *arg,int flags)
 				++count;
 			}
 		}
-		return printf("\treset counts = %d", count);
+		if (debug > 0)
+		printf("\treset counts = %d", count);
+		return 1;
 	}
 	else
 	{
@@ -643,7 +650,9 @@ static int check_func(char *arg,int flags)
 	unsigned int op=-1; // 0:==, 1:<>, 2:>=, 3:<=, 判断优先级从小到大
 	int i;
 	char *p1,*p2;
-
+	#ifdef DEBUG
+		printf("check:%s\n",arg);
+	#endif
 	p1 = arg;
 	p2 = p1;
 	while(*p2)
@@ -1496,9 +1505,12 @@ static int envi_cmd(const char *var,char * const env,int flags)
 			printf(" Variable %s not defined\n",var);
 			return 0;
 		}
-		printf("\t  counts = %d", count);
-		if( NULL == var)
-			printf("    max = %d", MAX_USER_VARS);
+		if (debug > 1)
+		{
+			printf("\t  counts = %d", count);
+			if( NULL == var)
+				printf("    max = %d", MAX_USER_VARS);
+		}
 		return 1;
 	}
 	j = 0xFF;
@@ -2078,8 +2090,7 @@ static int dir_func(char *arg, int flags)
 	i = 0;
 	while (*(name = p))
 	{
-		p = skip_to (0,p);
-		nul_terminate(name);
+		p = skip_next (SKIP_FLAGS_TERMINATE,p);
 		parse_string(name);
 		if (!*arg || dir_cmp(name,arg))
 		{
