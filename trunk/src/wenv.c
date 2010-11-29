@@ -294,7 +294,9 @@ static int main(char *arg,int flags)
 		return wenv_help();
 	if( 0 != strcmp_ex(VAR[_WENV_], "?_WENV") )// 检查默认变量
 		reset_env_all();
+	#ifdef DEBUG
 	printf("wenv_arg:%s\n",arg);
+	#endif
 	return wenv_func (arg , flags);
 }
 static char *check_Brackets(const char *arg)
@@ -550,7 +552,8 @@ static int set_func(char *arg,int flags)
 		upper(arg);
 	else if (ucase == 2)
 		lower(arg);
-	printf("%s=%s\n",var,arg);
+	if (debug > 0)
+		printf("%s=%s\n",var,arg);
 	if( set_envi(var, arg) )
 	{
 		return 1;
@@ -597,7 +600,7 @@ static int get_func(char *arg,int flags)
 static int call_func(char *arg,int flags)
 {
 	int ret;
-	ret = builtin_cmd(NULL, arg, flags);
+	ret = builtin_cmd(arg, skip_next (0, arg), flags);
 	sprintf(ENVI[_WENV_], "0x%X", ret);
 	return ret;
 }
