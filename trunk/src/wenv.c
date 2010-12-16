@@ -176,9 +176,9 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 #define _WENV_ 60
 #define WENV_RANDOM (*(unsigned long *)(ENVI[_WENV_]+0x20))
 #define QUOTE_CHAR (*(unsigned long *)(ENVI[_WENV_]+0x30))
+#define MAX_ARG_BUFF	0x1000
 enum ENUM_CMD {CMD_HELP=-1, VAR_TIP=0, CMD_SET, CMD_GET, CMD_RESET, CMD_CALC, CMD_CALL, CMD_READ, CMD_CHECK, CMD_FOR, CMD_ECHO, CMD_DIR};
-// 缓冲
-static char arg_new[MAX_ARG_LEN];
+
 static int wenv_func(char *arg, int flags);		/* 功能入口 */
 static int wenv_help_ex(enum ENUM_CMD cmd);		/* 显示帮助 */
 static void trim_p(char **p_str);
@@ -351,7 +351,6 @@ static char *skip_next (int flags,char *arg)
 		{
 			while (*++arg && *arg != QUOTE_CHAR)
 				;
-			continue;
 		}
 		/*
 		else if ((flags & 2) && *arg == '\\')
@@ -361,10 +360,11 @@ static char *skip_next (int flags,char *arg)
 				break;
 		}
 		*/
-		arg ++;
+		if (*arg)
+			arg ++;
 	}
 	
-	if (flags & SKIP_FLAGS_TERMINATE) //Nul_TERMINATE;
+	if ((flags & SKIP_FLAGS_TERMINATE) && *arg) //Nul_TERMINATE;
 		*arg++ = '\0';
 	while (*arg == ' ' || *arg == '\t' || ((flags & 1) && *arg == '='))
 		arg ++;
@@ -418,14 +418,22 @@ static int wenv_func(char *arg, int flags)
 	char *p1;
 	int ret = 0;
 	int status = 0;
+	int i;
 	wenv_flags = 0;
+	char *cmd_buff;
+	if ((cmd_buff = malloc(MAX_ARG_BUFF)) == NULL)
+		return 0;
+
 	while ( *p && (arg = p) != NULL)
 	{
 		if (*arg == '(')
 		{
 			p = check_Brackets(arg);
 			if (p == NULL)
+			{
+				free(cmd_buff);
 				return !(errnum = ERR_BAD_ARGUMENT);
+			}
 			*p++ = '\0';
 			p = skip_next_next_cmd(p,&status,STATUS_NONE);
 			ret = wenv_func(++arg,flags);
@@ -435,9 +443,8 @@ static int wenv_func(char *arg, int flags)
 			#ifdef DEBUG
 				printf("wenv_arg:%s\n",arg);
 			#endif
-			int i;
-			char cmd_buff[MAX_ENV_LEN + 1] = "\0";
-			p = skip_next_next_cmd(arg,&status,STATUS_NONE);
+			*cmd_buff = '\0';
+			p = skip_next_next_cmd(p,&status,STATUS_NONE);
 			replace_str(arg,cmd_buff,REPLACE_TRIM | MAX_ENV_LEN); //替换变量
 			arg = cmd_buff;
 			for (i=0;p_cmd_list[i].name != NULL ;i++)
@@ -446,7 +453,10 @@ static int wenv_func(char *arg, int flags)
 				{
 					arg = skip_next(0, arg);
 					if((unsigned char)*arg < (unsigned char)p_cmd_list[i].flags)
+					{
+						free(cmd_buff);
 						return wenv_help_ex(p_cmd_list[i].flags >> 8);
+					}
 					break;
 				}
 			}
@@ -454,6 +464,7 @@ static int wenv_func(char *arg, int flags)
 			{
 				if (debug == 2)
 					printf("wenv_arg:%s\n",arg);
+				free(cmd_buff);
 				return !(errnum = ERR_BAD_ARGUMENT);
 			}
 			ret = p_cmd_list[i].func(arg,flags);
@@ -467,8 +478,10 @@ static int wenv_func(char *arg, int flags)
 			continue;
 		p = skip_next_next_cmd(p,&status,STATUS_ELSE);
 	}
+	free(cmd_buff);
 	return ret;
 }
+
 static int set_func(char *arg,int flags)
 {
 	if(*arg < 'A')
@@ -575,7 +588,8 @@ static int get_func(char *arg,int flags)
 	if (arg[i] == '*') //显示包含指定字符的变量
 	return envi_cmd(t_var,NULL,2);
 	if (arg[i] && arg[i] != '=' && arg[i] != ' ') return 0;//超长
-	if(get_env(t_var, arg_new))
+	char tmp_buf[MAX_ENV_LEN+1] = "\0";//变量缓存
+	if(get_env(t_var, tmp_buf))
 	{
 		arg=skip_next(1,(char *)arg);
 		if (*arg)
@@ -585,13 +599,13 @@ static int get_func(char *arg,int flags)
 				errnum = 0;
 			else
 			{
-				return ascii_unicode(arg_new,(char *)(int)addr);
+				return ascii_unicode(tmp_buf,(char *)(int)addr);
 			}
 		}
 		if (debug > 1)
-			printf("%s = %s",t_var,arg_new);
-		sprintf(arg_new,"%d",strlen(arg_new));
-		set_envi ("?_GET",arg_new);
+			printf("%s = %s",t_var,tmp_buf);
+		sprintf(tmp_buf,"%d",strlen(tmp_buf));
+		set_envi ("?_GET",tmp_buf);
 		return 1;
 	}
 	return 0;
@@ -767,8 +781,6 @@ static int check_func(char *arg,int flags)
 
 static int replace(char *str ,const char *sub,const char *rep)
 {
-	char _buff[MAX_ENV_LEN];
-	char *p_buff = _buff;
 	int istr;
 	int isub;
 	int irep = 0;
@@ -781,31 +793,29 @@ static int replace(char *str ,const char *sub,const char *rep)
 		return 0;
 	if (rep != NULL)
 		irep = strlen(rep);
+	char *_buff,*p_buff;
+	if ((_buff = malloc(istr)) == NULL)
+		return 0;
+	p_buff = _buff;
 	strcpy(_buff,str);
 	istr = 0;
 	while (*p_buff)
 	{
-		if (*p_buff == *sub && memcmp(p_buff,sub,isub) == 0)
+		if (memcmp(p_buff,sub,isub) == 0)
 		{
 			if (irep > 0)
 			{
-				istr += irep;
-				if (istr > MAX_ENV_LEN)
-					return 0;
 				str += strcpyn(str,rep,irep);
-				//str += irep;
 			}
 			p_buff += isub;
 		}
 		else
 		{
 			*str++ = *p_buff++;
-			istr++;
 		}
-		if (istr > MAX_ENV_LEN)
-			return 0;
 	}
 	*str = '\0';
+	free(_buff);
 	return 1;
 }
 //删除字符串前后的空格和引号
@@ -885,7 +895,7 @@ static int for_func(char *arg, int flags)
 	char *cmd;  //指向do 后面的命令的指针
 	char *sub;  //临时变量  $X
 	char *check_sub; //()里面的内容
-	char command_buff[MAX_ENV_LEN+1] = "\0"; //命令行缓存
+	char command_buff[MAX_ARG_BUFF] = "\0"; //命令行缓存
 	char rep[MAX_ENV_LEN];	 //要替换的内容缓存
 	int x = 0;		//模式
 	int ret = 0;		//命令返回值
@@ -1349,10 +1359,6 @@ static int var_expand(char **arg, char **out)
 }
 static int replace_str(char *in, char *out, int flags)
 {
-	if (out == arg_new)
-	{
-		memset(out, 0, MAX_ARG_LEN);
-	}
 	unsigned int max_len = flags & 0xFFFF;
 	if (max_len == 0)
 		max_len = MAX_ENV_LEN;
@@ -1809,10 +1815,6 @@ static int ascii_unicode(const char *ch,char *addr)
 		i += 6;
 	}
 	sprintf(&addr[i],"\\0\\0\0");
-#ifdef DEBUG
-	sprintf(arg_new,"0x%X\0",i);
-	set_envi ("_wenv_",arg_new);
-#endif
 	return 1;
 }
 // 小写转大写

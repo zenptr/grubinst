@@ -204,21 +204,6 @@ typedef enum
 #define open ((int (*)(char *))((*(int **)0x8300)[26]))
 #define read ((unsigned long long (*)(unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[27]))
 #define close ((void (*)(void))((*(int **)0x8300)[28]))
-#define unicode_to_utf8 ((void (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[29]))
-/*
-int
-rawread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long byte_len, unsigned long long buf, unsigned long write)
-*/
-#define rawread ((int (*)(unsigned long, unsigned long, unsigned long, unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[30]))
-/*
-int
-rawwrite (unsigned long drive, unsigned long sector, char *buf)
-*/
-#define rawwrite ((int (*)(unsigned long, unsigned long, char *))((*(int **)0x8300)[31]))
-/*
-int
-devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
-*/
 #define devread ((int (*)(unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write))((*(int **)0x8300)[32]))
 /*
  * int
@@ -229,21 +214,39 @@ devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, u
 #define open_device ((int (*)(void))((*(int **)0x8300)[35]))
 #define real_open_partition ((int (*)(int))((*(int **)0x8300)[36]))
 #define set_device ((char *(*)(char *))((*(int **)0x8300)[37]))
-#define dir ((int (*)(char *))((*(int **)0x8300)[38]))
-#define print_a_completion ((void (*)(char *))((*(int **)0x8300)[39]))
-#define print_completions ((int (*)(int, int))((*(int **)0x8300)[40]))
 #define parse_string ((int (*)(char *))((*(int **)0x8300)[41]))
 #define hexdump ((void (*)(unsigned long, char *, int))((*(int **)0x8300)[42]))
 #define skip_to ((char *(*)(int after_equal, char *cmdline))((*(int **)0x8300)[43]))
 #define builtin_cmd ((int (*)(char *cmd, char *arg, int flags))((*(int **)0x8300)[44]))
 #define get_datetime ((void (*)(unsigned long *date, unsigned long *time))((*(int **)0x8300)[45]))
-#define lba_to_chs ((void (*)(unsigned long lba, unsigned long *cl, unsigned long *ch, unsigned long *dh))((*(int **)0x8300)[46]))
-#define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[47]))
-#define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[48]))
 #define get_mmap_entry ((int (*)(char *,int))((*(int **)0x8300)[49]))
 #define malloc ((void *(*)(int size))((*(int **)0x8300)[50]))
 #define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
 
+#if 0
+/*
+int
+devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
+*/
+#define dir ((int (*)(char *))((*(int **)0x8300)[61]))
+#define print_a_completion ((void (*)(char *))((*(int **)0x8300)[62]))
+#define print_completions ((int (*)(int, int))((*(int **)0x8300)[63]))
+#define lba_to_chs ((void (*)(unsigned long lba, unsigned long *cl, unsigned long *ch, unsigned long *dh))((*(int **)0x8300)[64]))
+#define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[65]))
+#define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[66]))
+#define unicode_to_utf8 ((void (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[67]))
+/*
+int
+rawread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long byte_len, unsigned long long buf, unsigned long write)
+*/
+#define rawread ((int (*)(unsigned long, unsigned long, unsigned long, unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[68]))
+/*
+int
+rawwrite (unsigned long drive, unsigned long sector, char *buf)
+*/
+#define rawwrite ((int (*)(unsigned long, unsigned long, char *))((*(int **)0x8300)[69]))
+
+#endif
 //#define getrtsecs ((int (*)(void))((*(int **)0x8300)[50]))
 //int getrtsecs (void);
 //#define graphics_get_font ((unsigned char *(*)(void))((*(int **)0x8300)[51]))
