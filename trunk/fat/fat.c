@@ -51,7 +51,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 #include "grub4dos.h"
 #include "fat.h"
 #define f_buf_sz 0x300000
-static char f_buf[0x300000];
+static char *f_buf;
 static int fat_func(char *arg,int flags);
 static unsigned long cur_drive;		//grub4dos drive num for FatFs Module
 static unsigned long cur_partition; 	//grub4dos partition num for FatFs Module
@@ -95,12 +95,16 @@ static char fat_err[][100]={
 };
 #endif
 int
-main ()
+main (char *arg,int flags)
 {
-	void *p = &main;
-	char *arg = p - (*(int *)(p - 8));
-	int flags = (*(int *)(p - 12));
-	return fat_func (arg , flags);
+//	void *p = &main;
+//	char *arg = p - (*(int *)(p - 8));
+//	int flags = (*(int *)(p - 12));
+	if ((f_buf = malloc(f_buf_sz)) == NULL)
+		return 0;
+	int ret=fat_func (arg , flags);
+	free(f_buf);
+	return ret;
 }
 
 /*
@@ -366,7 +370,7 @@ static FRESULT fat_copy (char *arg)
 	}
 	#endif
 
-	br = f_pos = read((unsigned long long)(unsigned int)(char *)&f_buf,f_buf_sz, GRUB_READ);
+	br = f_pos = read((unsigned long long)(int)f_buf,f_buf_sz, GRUB_READ);
 	close();
 
 	if (! f_pos)
@@ -399,7 +403,7 @@ static FRESULT fat_copy (char *arg)
 		}
 
 		filepos = f_pos;
-		br = read((unsigned long long)(unsigned int)(char *)&f_buf,f_buf_sz, GRUB_READ);
+		br = read((unsigned long long)(int)f_buf,f_buf_sz, GRUB_READ);
 		close();
 		f_pos += br;
 	}
