@@ -2,8 +2,8 @@
  * The C code for a grub4dos executable may have defines as follows:
  * 用于编写外部命令的函数定义。
 */
-#ifndef GRUB4DOS_2010_12_01
-#define GRUB4DOS_2010_12_01
+#ifndef GRUB4DOS_2010_12_15
+#define GRUB4DOS_2010_12_15
 #undef NULL
 #define NULL         ((void *) 0)
 
@@ -87,12 +87,18 @@ typedef enum
   ERR_FUNC_CALL,
 //  ERR_WRITE_TO_NON_MEM_DRIVE,
   ERR_INTERNAL_CHECK,
+  ERR_KERNEL_WITH_PROGRAM,
+  ERR_HALT,
+  ERR_PARTITION_LOOP,
+  ERR_NOT_ENOUGH_MEMORY,
+  ERR_BAT_GOTO,
+  ERR_BAT_CALL,
 
   MAX_ERR_NUM
 } grub_error_t;
 
-#define install_partition (*(unsigned long *)0x8208)
-#define boot_drive (*(unsigned long *)0x8280)
+#define install_partition (*(unsigned long long *)0x8208)
+#define boot_drive (*(unsigned long long *)0x8280)
 #define pxe_yip (*(unsigned long *)0x8284)
 #define pxe_sip (*(unsigned long *)0x8288)
 #define pxe_gip (*(unsigned long *)0x828C)
@@ -181,7 +187,6 @@ typedef enum
 #define getxy ((int (*)(void))((*(int **)0x8300)[4]))
 #define gotoxy ((void (*)(int, int))((*(int **)0x8300)[5]))
 #define cls ((void (*)(void))((*(int **)0x8300)[6]))
-#define setcursor ((int (*)(int))((*(int **)0x8300)[7]))
 #define nul_terminate ((int (*)(char *))((*(int **)0x8300)[8]))
 #define safe_parse_maxint_with_suffix ((int (*)(char **str_ptr, unsigned long long *myint_ptr, int unitshift))((*(int **)0x8300)[9]))
 #define safe_parse_maxint(str_ptr, myint_ptr) safe_parse_maxint_with_suffix(str_ptr, myint_ptr, 0)
@@ -192,15 +197,11 @@ typedef enum
 #define strncat ((int (*)(char *s1, const char *s2, int n))((*(int **)0x8300)[14]))
 #define strcmp ((int (*)(const char *s1, const char *s2))((*(int **)0x8300)[15]))
 #define strcpy ((char *(*)(char *dest, const char *src))((*(int **)0x8300)[16]))
-#define tolower ((int (*)(int))((*(int **)0x8300)[17]))
-#define isspace ((int (*)(int))((*(int **)0x8300)[18]))
 #define getkey ((int (*)(void))((*(int **)0x8300)[19]))
 #define checkkey ((int (*)(void))((*(int **)0x8300)[20]))
-#define sleep ((unsigned int (*)(unsigned int))((*(int **)0x8300)[21]))
 #define memcmp ((int (*)(const char *s1, const char *s2, int n))((*(int **)0x8300)[22]))
 #define memmove ((void *(*)(void *to, const void *from, int len))((*(int **)0x8300)[23]))
 #define memset ((void *(*)(void *start, int c, int len))((*(int **)0x8300)[24]))
-#define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[25]))
 #define open ((int (*)(char *))((*(int **)0x8300)[26]))
 #define read ((unsigned long long (*)(unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[27]))
 #define close ((void (*)(void))((*(int **)0x8300)[28]))
@@ -246,10 +247,13 @@ rawwrite (unsigned long drive, unsigned long sector, char *buf)
 */
 #define rawwrite ((int (*)(unsigned long, unsigned long, char *))((*(int **)0x8300)[69]))
 
+#define setcursor ((int (*)(int))((*(int **)0x8300)[70]))
+#define tolower ((int (*)(int))((*(int **)0x8300)[71]))
+#define isspace ((int (*)(int))((*(int **)0x8300)[72]))
+#define sleep ((unsigned int (*)(unsigned int))((*(int **)0x8300)[73]))
+#define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[74]))
+
 #endif
-//#define getrtsecs ((int (*)(void))((*(int **)0x8300)[50]))
-//int getrtsecs (void);
-//#define graphics_get_font ((unsigned char *(*)(void))((*(int **)0x8300)[51]))
 
 
 #define RAW_ADDR(x) (x)
