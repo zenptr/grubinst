@@ -733,8 +733,8 @@ static int check_func(char *arg,int flags)
 	arg = skip_next(SKIP_FLAGS_TERMINATE, p2);
 	//*(arg-1) = '\0';
 
-	trim_p(&p1);
-	trim_p(&p2);
+//	trim_p(&p1);
+//	trim_p(&p2);
 	#ifdef DEBUG
 		printf("%s <==> %s\n",p1,p2);
 	#endif
