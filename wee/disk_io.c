@@ -88,8 +88,8 @@ int fsys_type = NUM_FSYS;
 
 /* disk buffer parameters */
 
-//unsigned long buf_drive = -1;
-//unsigned long long buf_track = -1;/* low 32 bit to invalidate the buffer */
+unsigned long buf_drive = -1;
+unsigned long long buf_track = -1;/* low 32 bit to invalidate the buffer */
 
 //int rawread_ignore_memmove_overflow = 0;/* blocklist_func() set this to 1 */
 

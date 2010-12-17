@@ -454,6 +454,7 @@ E820_error_string:
 	.ascii	"\r\nMem fail\0"
 
 3:
+#if 0
 	/* EDX=top end of the usable block */
 
 	subl	$0x02000000, %edx	# EDX=start address, room 32M
@@ -523,6 +524,7 @@ E820_error_string:
 	shrl	$9, %edx				# start sector number
 	movl	%edx, ABS(int13_handler + 0xE8)
 	movl	$0x10000, ABS(int13_handler + 0xF0)	# 32M
+#endif
 
 	call real_to_prot
 
@@ -679,6 +681,8 @@ VARIABLE(startup_debug_keys)
 VARIABLE(script_char_pointer)
 	/* initially point to bootup script. 0 to invalidate the script. */
 	.long	0x800
+//VARIABLE(titles_count)
+//	.long	0
 
 	.code16
 
@@ -820,7 +824,37 @@ OldGDT:
 /*40*/	.long	0x0000FFFF, 0x00CF9B00	/* 32-bit code 4GB limit */
 
 MyGDTEnd:
+
+#else
+	.align 16
+MyGDT:
+//gdt:
+/* 0*/	.word	0	/* NULL entry. Can be used at will. */
+gdtdesc:		/* 6 bytes used for gdt descriptor. */
+	.word	MyGDTEnd - MyGDT - 1	/* GDT limit */
+	/* The gdt linear base address will be adjusted by set_int13_handler,
+	 * but not touched outside int13_handler. */
+	.long	ABS(MyGDT)		/* GDT linear address */
+
+/* 8*/	PM_DS16 = (. - MyGDT)	/* adjusted base = int13_handler */
+	.long	0x0000FFFF, 0x00009300	/* 16-bit data 64K limit */
+/*16*/	PM_DS32 = (. - MyGDT)
+	.long	0x0000FFFF, 0x00CF9300	/* 32-bit data 4GB limit */
+
+	/* The 16-bit code segment base will be adjusted by set_int13_handler,
+	 * but not touched outside int13_handler. */
+/*24*/	PM_CS16 = (. - MyGDT)	/* adjusted base = int13_handler */
+	.long	0x0000FFFF, 0x00009B00	/* 16-bit code 64K limit */
+/*32*/	LM_CS64 = (. - MyGDT)
+	.long	0x0000FFFF, 0x00AF9B00	/* 64-bit code 4GB limit */
+
+	/* This gdt entry is not used by int13_handler, but used outside. */
+/*40*/	PM_CS32 = (. - MyGDT)
+	.long	0x0000FFFF, 0x00CF9B00	/* 32-bit code 4GB limit */
+MyGDTEnd:
 #endif
+
+#if 0
 
 	.align	16
 
@@ -2308,6 +2342,8 @@ int13_handler_end:
 
 	. = . - (int13_handler_end - int13_handler)/0x3001
 
+#endif
+
 /****************************************************************************/
 
 /*
@@ -2336,7 +2372,7 @@ ENTRY(chain_stage1)
 
 	.code16
 
-	sti		/* for hardware interrupt or watchdog */
+	sti
 
 	lcall	*8(%bp)
 	//lcall	$0x2000, $0
@@ -2355,6 +2391,277 @@ ENTRY(chain_stage1)
 
 chain_stage1_esp:
 	.long	0
+
+/****************************************************************************/
+
+/*
+ * long realmode_run(long regs_ptr)
+ *
+ *  This starts another stage1 loader, at segment_offset.
+ */
+
+ENTRY(realmode_run)
+
+	.code32
+
+	pushl	%ebp
+	movl	%esp, %ebp
+
+	pushl	%ebx
+	movl	8(%ebp), %ebx		/* EBX=regs_ptr */
+
+	/* check sanity */
+
+	xorl	%eax, %eax		/* EAX=0 for failure */
+
+	movl	0x20(%ebx), %ecx	/* GS */
+	incl	%ecx
+	jz	1f
+	decl	%ecx
+	shrl	$16, %ecx
+	jnz	2f			/* failure */
+1:
+
+	movl	0x24(%ebx), %ecx	/* FS */
+	incl	%ecx
+	jz	1f
+	decl	%ecx
+	shrl	$16, %ecx
+	jnz	2f			/* failure */
+1:
+
+	movl	0x28(%ebx), %ecx	/* ES */
+	incl	%ecx
+	jz	1f
+	decl	%ecx
+	shrl	$16, %ecx
+	jnz	2f			/* failure */
+1:
+
+	movl	0x2C(%ebx), %ecx	/* DS */
+	incl	%ecx
+	jz	1f
+	decl	%ecx
+	shrl	$16, %ecx
+	jnz	2f			/* failure */
+1:
+
+	movl	0x30(%ebx), %ecx	/* SS */
+	movl	0x0C(%ebx), %edx	/* ESP */
+	incl	%ecx
+	jz	1f
+	decl	%ecx
+	orl	%edx, %ecx
+	shrl	$16, %ecx
+	jnz	2f			/* failure */
+	jmp	3f
+1:
+	incl	%edx
+	jnz	2f			/* failure */
+3:
+
+	movl	0x38(%ebx), %ecx	/* CS */
+	movl	0x34(%ebx), %edx	/* EIP */
+	incl	%ecx
+	jz	1f
+	decl	%ecx
+	orl	%edx, %ecx
+	shrl	$16, %ecx
+	jnz	2f			/* failure */
+	jmp	3f
+1:
+	cmpb	$0xCD, %dl
+	jnz	2f			/* failure */
+	shrl	$16, %edx
+	incw	%dx
+	jnz	2f			/* failure */
+3:
+	/* sanity check ok, run it! */
+
+	pushal
+	pushal
+	pushal
+	pushal
+	movl	%esp, ABS(chain_stage1_esp)
+
+	/* mov the struct to stack */
+	subl	$64, %esp
+	movl	%esp, %edi
+	movl	%ebx, %esi
+	movl	$16, %ecx
+	cld
+	repz movsl
+
+	movl	%esp, %ebp	/* EBP point to struct on stack */
+
+	call	prot_to_real
+
+	.code16
+
+	sti
+
+	movl	%ebp, %esp
+
+	/* check CS:EIP */
+
+	movl	0x38(%bp), %ecx		/* CS */
+	movl	0x34(%bp), %edx		/* EIP */
+	incl	%ecx
+	jz	3f
+
+	/* run user defined code */
+	decl	%ecx
+	movw	%dx, ABS(1f)
+	movw	%cx, ABS(1f + 2)
+
+	/* set return address for user code to return */
+	movl	$ABS(4f), %ecx
+	movl	%ecx, 0x8201
+	jmp	6f
+3:
+	/* run int xx */
+	movw	%dx, ABS(1f - 1)	/* int XX */
+	movb	$0xE9, ABS(1f + 1)	/* jmp */
+	movw	$(4f - 1f - 4), ABS(1f + 2)
+6:
+	movw	%sp, ABS(8f)		/* initial SP */
+	movw	%ss, ABS(7f)		/* initial SS */
+
+	/* set DS, ES, FS, GS */
+	movl	0x20(%bp), %ecx		/* GS */
+	incl	%ecx
+	jz	5f
+	decl	%ecx
+	movw	%cx, %gs
+5:
+
+	movl	0x24(%bp), %ecx		/* FS */
+	incl	%ecx
+	jz	5f
+	decl	%ecx
+	movw	%cx, %fs
+5:
+
+	movl	0x28(%bp), %ecx		/* ES */
+	incl	%ecx
+	jz	5f
+	decl	%ecx
+	movw	%cx, %es
+5:
+
+	movl	0x2C(%bp), %ecx		/* DS */
+	incl	%ecx
+	jz	5f
+	decl	%ecx
+	movw	%cx, %ds
+5:
+
+	movl	0x30(%bp), %ecx		/* SS */
+	incl	%ecx
+	jz	5f
+	decl	%ecx
+	movw	%cx, ABS(7f)
+	movw	0x0C(%bp), %dx		/* SP */
+	movw	%dx, ABS(8f)
+5:
+	movl	0x3C(%bp), %ecx		/* EFLAGS */
+	incl	%ecx
+	jz	5f
+	decl	%ecx
+	pushl	%ecx
+	popfl
+5:
+	popal				/* setup general registers */
+
+	/* move SS and SP */
+	.byte	0xBC			/* MOV SP */
+7:
+	.word	0			/* SS */
+	movw	%sp, %ss
+	.byte	0xBC			/* MOV SP */
+8:
+	.word	0			/* SP */
+
+	/* far jump to user code */
+	.byte	0xEA			/* ljmp */
+1:
+	.word	0			/* IP */
+	.word	0			/* CS */
+
+4:	/* return from user code */
+
+	/* CS:IP need not care */
+
+	/* use the stack already built by the user */
+
+	pushal
+	pushfl
+	pushl	%cs
+	pushl	$0
+	pushl	%ss
+	pushl	%ds
+	pushl	%es
+	pushl	%fs
+	pushl	%gs
+
+	movl	%ss, %ebp
+	shll	$4, %ebp
+	xorl	%eax, %eax
+	movw	%ax, %ds
+	movw	%ax, %es
+	movw	%sp, %ax
+	addl	%eax, %ebp		/* physical address of stack */
+
+	call	real_to_prot
+
+	.code32
+
+	cld
+	movl	%ebp, %esi
+
+	movl	ABS(chain_stage1_esp), %esp
+	movl	16(%esp), %ebx		/* EBX=regs_ptr */
+
+	leal	32(%ebx), %edi
+	movl	$8, %ecx
+	repz movsl
+
+	leal	32(%ebp), %esi
+	movl	%ebx, %edi
+	movl	$8, %ecx
+	repz movsl
+
+	/* the stack should not change! */
+	movl	%esp, %esi
+	leal	32(%esp), %edi
+	movl	$8, %ecx
+	repz cmpsl
+	jnz	1f
+	movl	%esp, %esi
+	leal	64(%esp), %edi
+	movl	$16, %ecx
+	repz cmpsl
+	jnz	1f
+	popal
+	popal
+	popal
+	popal
+	movl	$1, %eax		/* success */
+	popl	%ebx
+	popl	%ebp
+	ret
+1:
+	popal
+	popal
+	popal
+	popal
+	xorl	%eax, %eax		/* failure */
+2:
+	popl	%ebx
+	popl	%ebp
+	ret
+
+/****************************************************************************/
 
 /*
  * linux_boot()
@@ -2996,14 +3303,18 @@ ENTRY(enter_cmdline)
 	pushl	%eax		# use only AL
 	call	ABS(EXT_C(console_putchar))
 	popl	%eax
-	//pushl	%esi
+	pushl	%esi
 	pushl	%ebx
+	movl	$(CMDLINE_BUF), %ebx
+	movb	$0, (%ebx)
 	//movl	$0x800, ABS(EXT_C(script_char_pointer))
 	cmpb	$0, ABS(EXT_C(startup_debug_keys))	# Key C pressed?
 	je	1f					# No. Run script.
 	movl	$0, ABS(EXT_C(script_char_pointer))	# Yes. Skip the script.
 	movw	$0, ABS(EXT_C(startup_debug_keys))	# Clear key C & Insert.
 1:
+	//call	EXT_C(add_history)
+
 	movl	$(CMDLINE_BUF), %ebx
 	movb	$0, (%ebx)
 	pushl	ABS(EXT_C(script_char_pointer))		# non-zero for script.
@@ -3012,12 +3323,23 @@ ENTRY(enter_cmdline)
 	popl	%eax					# non-zero for script.
 	jnz	1f					# failure, return.
 
+	xorl	%esi, %esi	# indicator: last command in last menu item
 	testl	%eax, %eax				# non-zero for script.
 	jz	4f					# from keyboard.
 	//cmpl	$0x800, %eax
 	//jb	4f
 	//cmpl	$0x1800, %eax
 	//jnb	4f
+
+	/* if it is the last command in the script, and titles exist, then
+	 * set ESI=1.
+	 */
+	cmpl	$0, ABS(EXT_C(script_char_pointer))
+	jne	3f
+	cmpl	$0, EXT_C(titles_count)
+	je	3f
+	incl	%esi		# indicator: last commad in last menu item
+3:
 
 	/* this is a command in the bootup script. */
 	cmpb	$0, ABS(EXT_C(startup_debug_keys)) + 1	# Insert key pressed?
@@ -3042,7 +3364,7 @@ ENTRY(enter_cmdline)
 	jmp	3b
 4:
 
-	call	EXT_C(add_history)
+	//call	EXT_C(add_history)
 
 	pushl	%ebx
 	call	EXT_C(find_command)
@@ -3057,6 +3379,10 @@ ENTRY(enter_cmdline)
 	cmpl	$EXT_C(builtin_exit), %eax
 	je	1f
 
+	/* if it is command "title", then display menu. */
+	cmpl	$EXT_C(builtin_title), %eax
+	je	30f
+
 	pushl	%eax
 	pushl	%ebx
 	call	EXT_C(skip_to)
@@ -3066,18 +3392,341 @@ ENTRY(enter_cmdline)
 	pushl	%eax
 	call	*4(%ebx)
 	popl	%ebx
-	jmp	1b
+	jmp	3f
 2:
 	pushl	%ebx
 	call	EXT_C(command_func)
 	popl	%ebx
-	jmp	1b
+3:
+	call	EXT_C(add_history)
+	decl	%esi		# last command in last menu item?
+	jnz	1b		# no, get next line.
+
+	# yes. print menu.
+
+	//call	EXT_C(add_history)
+30:
+	/* check titles */
+	//movb	$0, ABS(EXT_C(startup_debug_keys)) + 1	# Clear Insert key.
+	pushal	#-----------------------------------------------------------
+	/* find all titles in script */
+	movl	$1, EXT_C(is_real_title)	# initialize to true
+	movl	$0, EXT_C(real_titles_count)
+	movl	$0, EXT_C(titles_count)
+	movl	$0x800, %edi
+10:
+	movb	$0x20, %al
+	movl	$0x1800, %ecx
+	subl	%edi, %ecx
+	jbe	19f
+	cld
+	repz scasb
+	decl	%edi
+	//cmpb	$0, (%edi)
+	//je	19f
+	xorl	%ebx, %ebx		/* indicator: title not found */
+	cmpl	$0x6C746974, (%edi)	/* "titl" */
+	jne	11f			/* not title, try next */
+	cmpb	$0x65, 4(%edi)		/* "e"   */
+	jne	11f			/* not title, try next */
+	cmpb	$0x20, 5(%edi)		/* space */
+	ja	11f			/* not title, try next */
+	/* "title" found */
+	cmpl	$20, EXT_C(titles_count)
+	jnb	19f		# too many titles, ignored
+	call	94f	/* check if the last title is real */
+	cmpl	$0, EXT_C(titles_count)
+	jne	12f
+	/* for the first title, clear screen */
+#if 0
+	//////////////////////////////////////////////////////////
+	/* print 40 new lines to simulate clearing screen */	//
+	movl	$40, %ecx					//
+	movb	$'\n', %al					//
+50:								//
+	pushl	%eax		# use only AL			//
+	call	ABS(EXT_C(console_putchar))			//
+	popl	%eax						//
+	loop	50b						//
+	/* cursor is now at the bottom left of the screen */	//
+	//////////////////////////////////////////////////////////
+#else
+	//////////////////////////////////////////////////////////
+	/* place cursor at bottom left corner */		//
+	movw	$0x1800, 0x450		# BDA 0040:0050		//
+	/* clear screen by writing VGA text buffer */		//
+	movl	$0x07200720, %eax	# white Spaces		//
+	movl	%edi, %ebx		# save EDI into EBX	//
+	movl	$0xB8000, %edi		# EDI=Video buffer	//
+	movl	$(80*25/2), %ecx				//
+	cld							//
+	repz stosl						//
+	movl	%ebx, %edi		# restore EDI from EBX	//
+	//////////////////////////////////////////////////////////
+#endif
+12:
+	/* print at most 78 bytes after the title */
+	//////////////////////////////////////////////////////////////////
+	/* now the titles_count is counted from 0, we will print */	//
+	/* the titles from the top line -- line 0 of the screen. */	//
+	movl	$160, %eax	# 80 chars, each has an attribute byte	//
+	mull	EXT_C(titles_count)	# line number			//
+        /* EDX:EAX=offset of the line in VGA text buffer, EDX=0  */	//
+	movl	%edi, %ebx	# save EDI into EBX			//
+	leal	5(%edi), %esi	# points to space after "title"		//
+	leal	0xB8002(%eax), %edi	# EDI=offset			//
+	movl	$78, %ecx						//
+	cld								//
+	movb	$0x07, %ah	# attribute "white"			//
+50:									//
+	lodsb								//
+	cmpb	$0x20, %al						//
+	jb	50f		# end at non-printable chars		//
+	stosw								//
+	loop	50b							//
+50:									//
+	movl	%ebx, %edi	# restore EDI from EBX			//
+	//////////////////////////////////////////////////////////////////
+	incl	EXT_C(titles_count)
+	incl	EXT_C(real_titles_count)
+	movl	$0, EXT_C(is_real_title)	# reset to false
+	jmp	13f
+11:
+	cmpb	$0x20, (%edi)
+	jbe	13f
+	movl	$1, EXT_C(is_real_title)	# set to true
+13:
+	/* locate the beginning of next line */
+	cmpb	$0x20, (%edi)
+	incl	%edi		# INC will not touch CF
+	jnb	13b
+	cmpb	$0, -1(%edi)	# end of script?
+	je	14f		# yes, exit
+	call	95f
+	jmp	10b		# no, check next line
+14:
+	decl	%edi
+	call	95f
+	call	94f	/* check if the last title is real */
+19:
+	popal	#-----------------------------------------------------------
+
+	/* all titles printed. if none, skip to 1f */
+
+	cmpl	$0, EXT_C(titles_count)
+	je	1f
+
+	cmpl	$0, EXT_C(real_titles_count)
+	je	49f
+
+	/* if default_entry is too big, set it to 0, and set timeout=-1 */
+	movl	EXT_C(default_entry), %eax
+	cmpl	EXT_C(real_titles_count), %eax
+	jb	50f
+	movl	$0, EXT_C(default_entry)
+	movl	$-1, EXT_C(grub_timeout)
+50:
+
+	/* highlight the default item */
+	call	96f
+
+	/* get user's key press */
+	//movl	EXT_C(grub_timeout), %ecx
+49:
+	xorl	%ecx, %ecx
+	movl	$91, %eax	# (91/18.2)=5 seconds
+	mull	EXT_C(grub_timeout)
+	jc	51f
+	movb	$5, %cl
+	divl	%ecx
+	xchgl	%eax, %ecx	# ECX=timer ticks
+50:
+	incl	%ecx
+	jz	51f
+	decl	%ecx
+#if 0	/* QEMU cannot update VGA on buffer change:( */
+	//////////////////////////////////////////////////////////////////
+	/* print the time out, write VGA text buffer */			//
+	pushal								//
+	movl	$5, %eax						//
+	mull	%ecx							//
+	movl	$91, %ebx						//
+	divl	%ebx							//
+	cmpl	$5, %edx	# the remainder should be less than 5	//
+	jnb	48f							//
+	/* EAX is time out value in seconds */				//
+	pushal			# 32-byte buffer for int_to_ascii	//
+	movl	%esp, %esi						//
+	pushl	$0							//
+	pushl	%eax							//
+	pushl	$'d'		# decimal				//
+	pushl	%esi		# the buffer				//
+	call	EXT_C(int_to_ascii)					//
+	movl	%eax, %esi	# the string				//
+	movl	$(0xB8000+(160*24)), %edi	# VGA text buffer	//
+	cld								//
+	movb	$0x07, %ah						//
+46:									//
+	lodsb								//
+	testb	%al, %al						//
+	jz	47f							//
+	stosw								//
+	jmp	46b							//
+47:									//
+	movb	$0x20, %al						//
+	stosw								//
+	stosw								//
+	addl	$48, %esp						//
+48:									//
+	popal								//
+	//////////////////////////////////////////////////////////////////
+#else
+	//////////////////////////////////////////////////////////////////
+	pushal								//
+	movl	$5, %eax						//
+	mull	%ecx							//
+	movl	$91, %ebx						//
+	divl	%ebx							//
+	cmpl	$5, %edx	# the remainder should be less than 5	//
+	jnb	48f							//
+	/* EAX is time out value in seconds */				//
+	pushl	%ebx		# highest byte=0 to end ASCII string	//
+	pushal			# 32-byte buffer for int_to_ascii	//
+	movl	%esp, %esi						//
+	pushl	$0							//
+	pushl	%eax							//
+	pushl	$'d'		# decimal				//
+	pushl	%esi		# the buffer				//
+	call	EXT_C(int_to_ascii)					//
+	movl	$0x0D202020, 31(%esi)	# 3 Spaces, CR			//
+	subl	$4, %eax						//
+	movl	$0x2020200D, (%eax)					//
+	pushl	%eax		# the string				//
+	call	EXT_C(grub_putstr)					//
+	addl	$56, %esp						//
+48:									//
+	popal								//
+	//////////////////////////////////////////////////////////////////
+#endif
+51:
+	pushl	%ecx
+	call	ABS(EXT_C(console_checkkey))
+	popl	%ecx
+	incl	%eax
+	loopz	50b	# no key-press
+	jz	55f	# time out, use default entry number
+	
+	/* key pressed, set timeout=-1 */
+	movl	$-1, EXT_C(grub_timeout)
+	call	ABS(EXT_C(console_getkey))
+	cmpb	$'c', %al
+	jz	1f
+	cmpb	$'C', %al
+	jz	1f
+	cmpb	$'q', %al
+	jz	1f
+	cmpb	$'Q', %al
+	jz	1f
+	cmpb	$0x1B, %al	# -- Esc --, cannot use $'\e' here
+	jz	1f
+	/* if no real titles, ignore other keys */
+	cmpl	$0, EXT_C(real_titles_count)
+	je	49b
+	cmpb	$'b', %al
+	jz	55f
+	cmpb	$'B', %al
+	jz	55f
+	cmpb	$0x0D, %al	# -- CR --
+	jz	55f
+	cmpb	$0x0A, %al	# -- LF --
+	jz	55f
+	cmpw	$0x4800, %ax	# KEY_UP
+	jnz	52f
+	/* cancel old highlighted entry */
+	call	96f
+	decl	EXT_C(default_entry)
+	jmp	53f
+52:
+	cmpw	$0x5000, %ax	# KEY_DOWN
+	jnz	54f
+	/* cancel old highlighted entry */
+	call	96f
+	incl	EXT_C(default_entry)
+53:
+	/* get the selected item */
+	movl	EXT_C(default_entry), %eax
+	addl	EXT_C(real_titles_count), %eax
+	xorl	%edx, %edx
+	divl	EXT_C(real_titles_count)	# EDX=new entry number
+	movl	%edx, EXT_C(default_entry)	# set new entry number
+	/* highlight it */
+	call	96f
+54:
+	jmp	49b		# get next key
+
+55:
+	/* run script of selected item */
+	/* if no real titles, exit to command line */
+	cmpl	$0, EXT_C(real_titles_count)
+	je	1f
+	/* get the script pointer */
+	movl	EXT_C(default_entry), %esi
+	shll	$2, %esi
+	movl	$EXT_C(title_scripts), %ebx
+	movl	(%ebx, %esi), %eax
+	movl	%eax, ABS(EXT_C(script_char_pointer))
+	//movb	$0, ABS(EXT_C(startup_debug_keys)) + 1	# Clear Insert key.
+	jmp	1b		# run the script!!
 1:
+	movl	$0, ABS(EXT_C(script_char_pointer))	# Skip the script.
 	movb	$0, ABS(EXT_C(startup_debug_keys)) + 1	# Clear Insert key.
 	popl	%ebx
-	//popl	%esi
+	popl	%esi
 	ret
 
+94://check_real_title
+	cmpl	$0, EXT_C(is_real_title)	# last title is real?
+	jnz	52f				# yes, accept it
+	decl	EXT_C(real_titles_count)	# no, cancel it
+52:
+	ret
+
+95://record the starting pointer of the script for this title
+	testl	%ebx, %ebx	# is it a title line?
+	jz	51f		# no, skip
+	pushal
+	movl	EXT_C(real_titles_count), %esi
+	decl	%esi
+	movl	EXT_C(titles_count), %eax
+	decl	%eax
+	movl	$EXT_C(real_title_numbers), %ebx
+	movb	%al, (%ebx, %esi)
+	shll	$2, %esi
+	movl	$EXT_C(title_scripts), %ebx
+	movl	%edi, (%ebx, %esi)
+	popal
+51:
+	ret
+96://toggle highlight
+	//pushal
+	//////////////////////////////////////////////////////////////////
+	movl	EXT_C(default_entry), %eax				//
+	movl	$EXT_C(real_title_numbers), %ecx			//
+	movzbl	(%eax, %ecx), %ecx					//
+	movl	$160, %eax	# 80 chars, each has an attribute byte	//
+	mull	%ecx		# line number				//
+        /* EDX:EAX=offset of the line in VGA text buffer, EDX=0  */	//
+	leal	0xB8003(%eax), %edx	# EDX=offset			//
+	movl	$78, %ecx						//
+	cld								//
+50:									//
+	xorb	$0x77, (%edx)	# reverse attribute			//
+	incl	%edx							//
+	incl	%edx							//
+	loop	50b							//
+	//////////////////////////////////////////////////////////////////
+	//popal
+	ret
 99:
 	.string	" [Yes/No?]"
 
@@ -5516,6 +6165,7 @@ ENTRY(get_cmdline)
 VARIABLE(is_filename)
 	.long	0
 
+#if 0
 /*
  * set_int13_handler(map)
  *
@@ -5710,7 +6360,7 @@ ENTRY(unset_int13_handler)
 	popl	%edi
 	popl	%ebp
 	ret
-
+#endif
 
 /* get_code_end() :  return the address of the end of the code
  * This is here so that it can be replaced by asmstub.c.
@@ -5793,51 +6443,56 @@ VARIABLE(system_functions)
 	.long	EXT_C(grub_putstr)
 	.long	ABS(EXT_C(console_putchar))
 	.long	EXT_C(get_cmdline)
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// getxy
+	.long	ABS(EXT_C(install_partition))	// gotoxy
+	.long	ABS(EXT_C(install_partition))	// cls
+	.long	ABS(EXT_C(install_partition))	// setcursor
 	.long	EXT_C(nul_terminate)
-	.long	EXT_C(safe_parse_maxint)
+	.long	EXT_C(safe_parse_maxint) // safe_parse_maxint_with_suffix
 	.long	EXT_C(substring)
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// grub_strstr
 	.long	EXT_C(grub_strlen)
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// grub_strtok
+	.long	ABS(EXT_C(install_partition))	// grub_strncat
 	.long	EXT_C(grub_strcmp)
 	.long	EXT_C(grub_strcpy)
 	.long	EXT_C(grub_tolower)
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(console_getkey))	/* getchar */
+	.long	ABS(EXT_C(install_partition))	// grub_isspace
+	.long	ABS(EXT_C(console_getkey))
 	.long	ABS(EXT_C(console_checkkey))
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// grub_sleep
 	.long	EXT_C(grub_memcmp)
 	.long	EXT_C(grub_memmove)
 	.long	EXT_C(grub_memset)
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// mem64
 	.long	EXT_C(grub_open)
 	.long	EXT_C(grub_read)
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// grub_close
 	.long	EXT_C(unicode_to_utf8)
 	.long	EXT_C(rawread)
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// rawwrite
 	.long	EXT_C(devread)
-	.long	ABS(EXT_C(install_partition))
-	.long	EXT_C(list_partitions)
+	.long	ABS(EXT_C(install_partition))	// devwrite
+	.long	ABS(EXT_C(install_partition))	// next_partition
 	.long	EXT_C(open_device)
-	.long	EXT_C(open_partition)
+	.long	EXT_C(open_partition)		// real_open_partition
 	.long	EXT_C(set_device)
 	.long	EXT_C(dir)
 	.long	EXT_C(print_a_completion)
 	.long	EXT_C(print_completions)
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
-	.long	ABS(EXT_C(install_partition))
+	.long	ABS(EXT_C(install_partition))	// parse_string
+	.long	ABS(EXT_C(install_partition))	// hexdump
+	.long	ABS(EXT_C(install_partition))	// skip_to
+	.long	ABS(EXT_C(install_partition))	// builtin_cmd
+	.long	ABS(EXT_C(install_partition))	// get_datetime
+	.long	ABS(EXT_C(install_partition))	// lba_to_chs
+	.long	ABS(EXT_C(install_partition))	// probe_bpb
+	.long	ABS(EXT_C(install_partition))	// probe_mbr
+	.long	ABS(EXT_C(install_partition))	// get_mmap_entry
+	.long	ABS(EXT_C(install_partition))	// grub_malloc
+	.long	ABS(EXT_C(install_partition))	// grub_free
+	.long	EXT_C(list_partitions)
+	.long	ABS(EXT_C(realmode_run))
 
 /*
  * The C code for a grub4dos executable may have defines as follows:
@@ -5857,7 +6512,8 @@ VARIABLE(system_functions)
  */
 
 VARIABLE(system_variables)
-#if 0
+
+#if 1	/* this group of variables are not used by wee */
 VARIABLE(next_partition_drive)
 	.long	0
 VARIABLE(next_partition_dest)
@@ -5880,40 +6536,50 @@ VARIABLE(next_partition_buf)
 	.long	0
 #endif
 
-VARIABLE(buf_drive)
-	.long	-1
-VARIABLE(buf_track)
-	.long	-1
-	.long	0
 VARIABLE(quit_print)
 	.long	0
+//VARIABLE(buf_drive)
+	.long	-1
+//VARIABLE(buf_track)
+	.long	-1
+//	.long	0
 VARIABLE(filesystem_type)
 	.long	0
-VARIABLE(query_block_entries)
+//VARIABLE(query_block_entries)
 	.long	0
+
+#if 1	/* this group of variables are not used by wee */
 //VARIABLE(map_start_sector)
-//	.long	0
-//	.long	ABS(EXT_C(buf_geom))
-//	.long	ABS(EXT_C(tmp_geom))
-//	.long	ABS(EXT_C(term_table))
-//VARIABLE(current_term)
-//	.long	ABS(EXT_C(term_table))
-//	.long	ABS(EXT_C(fsys_table))
+	.long	0
+	.long	0	// ABS(EXT_C(buf_geom))
+	.long	0	// ABS(EXT_C(tmp_geom))
+	.long	0	// ABS(EXT_C(term_table))
+VARIABLE(current_term)
+	.long	0	// ABS(EXT_C(term_table))
+	.long	0	// ABS(EXT_C(fsys_table))
+#endif
+
 //VARIABLE(fsys_type)
-//	.long	NUM_FSYS
-//	.long	NUM_FSYS
-//VARIABLE(graphics_inited)
-//	.long	0
-//	.long	ABS(EXT_C(VARIABLE_GRAPHICS))
-//VARIABLE(font8x16)
-//	.long	0
-//VARIABLE(fontx)
-//	.long	0
-//VARIABLE(fonty)
-//	.long	0
-//VARIABLE(graphics_CURSOR)
-//	.long	0
-//	.long	(EXT_C(menu_broder))
+	.long	NUM_FSYS
+	.long	NUM_FSYS
+
+#if 1	/* this group of variables are not used by wee */
+VARIABLE(graphics_inited)
+	.long	0
+	.long	0	// ABS(EXT_C(VARIABLE_GRAPHICS))
+VARIABLE(font8x16)
+	.long	0
+VARIABLE(fontx)
+	.long	0
+VARIABLE(fonty)
+	.long	0
+VARIABLE(graphics_CURSOR)
+	.long	0
+	.long	0	// (EXT_C(menu_broder))
+VARIABLE(gzip_filemax)
+	.long	0
+	.long	0
+#endif
 
 #endif /* ! STAGE1_5 */
 

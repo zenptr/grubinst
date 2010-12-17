@@ -297,8 +297,9 @@
 #define ERR_INTERNAL_CHECK		72
 #define ERR_KERNEL_WITH_PROGRAM		73
 #define ERR_HALT			74
+#define ERR_PARTITION_LOOP		75
 
-#define MAX_ERR_NUM			75
+#define MAX_ERR_NUM			76
 
 #ifndef ASM_FILE
 /*
@@ -443,22 +444,19 @@ void cmain (void);
 
 /* calls for direct boot-loader chaining */
 int chain_stage1 (unsigned long segment_offset);
+int console_getkey (void);
+int console_checkkey (void);
 #define chain_stage1 ((int (*)(unsigned long))((char *)(&chain_stage1) - 0x300000))
-void chain_stage2 (unsigned long segment, unsigned long offset,
-		   int second_sector)
-     __attribute__ ((noreturn));
+#define console_getkey ((int (*)(void))((char *)(&console_getkey) - 0x300000))
+#define console_checkkey ((int (*)(void))((char *)(&console_checkkey) - 0x300000))
 
 /* Return the data area immediately following our code. */
 int get_code_end (void);
 
 void console_putchar (int c);
-
-int getkey (void);
-
-int checkkey (void);
+#define console_putchar ((void (*)(int))((char *)(&console_putchar) - 0x300000))
 
 /* Low-level disk I/O */
-extern int biosdisk_int13_extensions (int ax, int drive, void *dap);
 int biosdisk (int subfunc, int drive, unsigned long long sector, unsigned long nsec, int segment);
 
 /* The table for a builtin.  */

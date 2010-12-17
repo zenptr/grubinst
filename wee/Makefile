@@ -29,15 +29,22 @@ wee63start.o: wee63start.S stage2_size.h
 .c.o:
 	gcc -Os -fno-stack-protector -fno-builtin -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef -c $<
 
-.PHONY: all
+clean:
+	rm -f *.o wee63start pre_stage2
+
+.PHONY: all clean
 
 stage2_size.h: pre_stage2
 	-rm -f stage2_size.h
 	set dummy `ls -l pre_stage2`; \
 	echo "#define STAGE2_SIZE $$6" > stage2_size.h
 
-wee63.mbr: pre_stage2 wee63start
+wee63.mbr: pre_stage2 wee63start preset_menu_used
 	-rm -f wee63.mbr
 	echo -n -e "\000\000\000\000\000\000\000\000\000\000\000\000" | cat wee63start pre_stage2 - > wee63.mbr
 	if [ -f ./preset_menu_used ]; then echo -n -e "\000" | cat ./preset_menu_used - >> wee63.mbr ;fi
+
+preset_menu_used:
+	echo File not found: preset_menu_used
+	exit 1
 

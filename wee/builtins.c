@@ -76,6 +76,14 @@ int command_func (char *arg/*, int flags*/);
 int num_history = 0;
 int history;
 
+int titles_count = 0;
+int real_titles_count = 0;
+int title_scripts[40];
+char real_title_numbers[40];
+int is_real_title;
+int default_entry = 0;
+int grub_timeout = -1;
+
 char * get_history (void);
 void add_history (void);
 
@@ -1256,6 +1264,18 @@ static struct builtin builtin_root =
   root_func,
 };
 
+static int
+rootnoverify_func (char *arg/*, int flags*/)
+{
+  return real_root_func (arg, 0);
+}
+
+static struct builtin builtin_rootnoverify =
+{
+  "rootnoverify",
+  rootnoverify_func,
+};
+
 #endif
 
 
@@ -1596,15 +1616,104 @@ struct builtin builtin_exit =
   0/* we have no exit_func!! */,
 };
 
+struct builtin builtin_title =
+{
+  "title",
+  0/* we have no title_func!! */,
+};
+
+static int
+default_func (char *arg/*, int flags*/)
+{
+  unsigned long long ull;
+  if (! safe_parse_maxint (&arg, &ull))
+    return 0;
+
+  default_entry = ull;
+  return 1;
+}
+
+static struct builtin builtin_default =
+{
+  "default",
+  default_func,
+};
+
+static int
+timeout_func (char *arg/*, int flags*/)
+{
+  unsigned long long ull;
+  if (! safe_parse_maxint (&arg, &ull))
+    return 0;
+
+  grub_timeout = ull;
+  return 1;
+}
+
+static struct builtin builtin_timeout =
+{
+  "timeout",
+  timeout_func,
+};
+
+static int
+pause_func (char *arg/*, int flags*/)
+{
+  char *p;
+  unsigned long long wait = -1;
+  unsigned long i;
+
+  for (;;)
+  {
+    if (grub_memcmp (arg, "--wait=", 7) == 0)
+      {
+        p = arg + 7;
+        if (! safe_parse_maxint (&p, &wait))
+                return 0;
+      }
+    else
+        break;
+    arg = skip_to (/*0, */arg);
+  }
+
+  printf("%s\n", arg);
+
+  if ((unsigned long)wait != -1)
+  {
+    /* calculate ticks */
+    i = ((unsigned long)wait) * 91;
+    wait = i / 5;
+  }
+  for (i = 0; i <= (unsigned long)wait; i++)
+  {
+    /* Check if there is a key-press.  */
+    if (console_checkkey () != -1)
+	return console_getkey ();
+  }
+
+  return 1;
+}
+
+static struct builtin builtin_pause =
+{
+  "pause",
+  pause_func,
+};
+
 /* The table of builtin commands. Sorted in dictionary order.  */
 struct builtin *builtin_table[] =
 {
   //&builtin_cat,
   &builtin_command,
+  &builtin_default,
   &builtin_exit,
   &builtin_find,
   //&builtin_map,
+  &builtin_pause,
   &builtin_root,
+  &builtin_rootnoverify,
+  &builtin_timeout,
+  &builtin_title,
   0
 };
 

@@ -1,2 +1,17 @@
 echo weeeeeeeeeeeeeee:)
+default 0
+timeout 30
+title Test title 1. Note: you may press C or Q or ESC to enter command line
+echo 1111111111111
+pause --wait=10 Press any key to continue...
+title Test title 2. Command 'exit' can be used to enter command line
+echo 2222222222222
+pause --wait=10 Press any key to enter command line...
+exit
+title Note: At wee prompt, you may use the 'title' command to go back to menu.
+echo 3333333333333
+pause --wait=10 Press any key to continue...
+title Note: Using 'exit' before all titles can effectively disable the menu.
+echo 4444444444444
+pause --wait=10 Press any key to continue...
 
