@@ -305,6 +305,27 @@ command_func (char *arg/*, int flags*/)
 		  data_len = setup_sects << 9;
 		  text_len = load_length - data_len - 0x200;
 
+		  //
+		  // initrd
+		  //
+		  // ---------- new cur_addr ------------------------
+		  //
+		  // .........
+		  //
+		  // ---------- cur_addr ----------------------------
+		  //
+		  // a copy of bootsect+setup of vmlinuz
+		  //
+		  // ---------- linux_data_tmp_addr -----------------
+		  //
+		  // a copy of pmode code of vmlinuz, the "text"
+		  //
+		  // ---------- linux_bzimage_tmp_addr --------------
+		  //
+		  // vmlinuz
+		  //
+		  // ---------- prog_start --------------------------
+
 		  linux_bzimage_tmp_addr = (char *)((prog_start + load_length + 15) & 0xFFFFFFF0);
 		  linux_data_tmp_addr = (char *)(((unsigned long)(linux_bzimage_tmp_addr + text_len + 15)) & 0xFFFFFFF0);
 
@@ -346,11 +367,16 @@ command_func (char *arg/*, int flags*/)
 		  if (! grub_open (arg))
 			goto fail;
 
-		  if (((unsigned long *)(&filemax))[1] || (unsigned long)filemax < 512 || (unsigned long)filemax > 0x40000000UL)
+		  if ( (filemax >> 32)	// ((unsigned long *)(&filemax))[1]
+			|| (unsigned long)filemax < 512
+			|| (unsigned long)filemax > ((0xfffff000 & free_mem_end) - cur_addr)/*0x40000000UL*/)
 		  {
 			errnum = ERR_WONT_FIT;
 			goto fail;
 		  }
+
+		  cur_addr = free_mem_end - (unsigned long)filemax; /* load to top */
+		  cur_addr &= 0xfffff000;
 
 		  if ((len = grub_read ((unsigned long long)cur_addr, -1ULL, 0xedde0d90)) != filemax)
 			goto fail;
@@ -446,6 +472,7 @@ non_linux:
 			//install_partition = current_partition;
 			chain_boot_IP = 0x00600000;
 			chain_load_to = 0x0600;
+drdos:
 			chain_load_from = prog_start;
 			chain_load_dword_len = ((load_length + 3) >> 2);
 			chain_edx = current_drive;
@@ -466,6 +493,19 @@ non_linux:
 			chain_edx = current_drive;
 			((char *)(&chain_edx))[1] = ((char *)(&current_partition))[2];
 			chain_ebx = 0;
+			HMA_start();   /* no return */
+		} else if ((*(long long *)prog_start | 0xFFFF02LL) == 0x4F43000000FFFFEBLL && (*(((long long *)prog_start)+1) == 0x706D6F435141504DLL))   /* DR-DOS */
+		{
+			chain_boot_IP = 0x00700000;
+			chain_load_to = 0x0700;
+			goto drdos;
+		} else if ((*(long long *)(prog_start + 0x200)) == 0xCB5052C03342CA8CLL && (*(long *)(prog_start + 0x208) == 0x5441464B))   /* ROM-DOS */
+		{
+			chain_boot_IP = 0x10000000;
+			chain_load_to = 0x10000;
+			chain_load_from = prog_start + 0x200;
+			chain_load_dword_len = ((load_length - 0x200 + 3) >> 2);
+			*(unsigned long *)0x84 = current_drive | 0xFFFF0000;
 			HMA_start();   /* no return */
 		} else
 			return ! (errnum = ERR_EXEC_FORMAT);
@@ -1196,7 +1236,7 @@ real_root_func (char *arg, int attempt_mnt)
 
       //if (fsys_type != NUM_FSYS || ! next)
       {
-	grub_printf ("\n(%X,%d):%lx,%lx:%02X,%02X:%s"
+	grub_printf ("(%X,%d):%lx,%lx:%02X,%02X:%s\n"
 		, (long)current_drive
 		, (long)(((unsigned char *)(&current_partition))[2])
 		, (unsigned long long)part_start
@@ -1244,7 +1284,7 @@ real_root_func (char *arg, int attempt_mnt)
   }
 
   if (*saved_dir)
-	grub_printf ("\nThe current working directory(i.e., the relative path) is %s", saved_dir);
+	grub_printf ("The current working directory(i.e., the relative path) is %s\n", saved_dir);
 
   /* Clear ERRNUM.  */
   errnum = 0;
@@ -1426,7 +1466,7 @@ find_func (char *arg/*, int flags*/)
 		  if (ret)
 		  {
 			grub_sprintf (root_found, "(0x%X,%d)", drive, pi[i].part_num);
-		        grub_printf ("\n%s", root_found);
+		        grub_printf ("%s ", root_found);
 			got_file = 1;
 		        if (set_root && (drive < 0x80 || pi[i].part_num != 0xFF))
 				goto found;
@@ -1442,7 +1482,7 @@ find_func (char *arg/*, int flags*/)
 		      if (ret)
 		      {
 			grub_sprintf (root_found, "(0x%X,%d)", drive, pi[i].part_num);
-			grub_printf ("\n%s", root_found);
+			grub_printf ("%s ", root_found);
 		        got_file = 1;
 		        if (set_root && (drive < 0x80 || pi[i].part_num != 0xFF))
 				goto found;

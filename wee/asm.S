@@ -454,6 +454,7 @@ E820_error_string:
 	.ascii	"\r\nMem fail\0"
 
 3:
+	movl	%edx, ABS(EXT_C(free_mem_end))
 #if 0
 	/* EDX=top end of the usable block */
 
@@ -6141,15 +6142,27 @@ ENTRY(get_cmdline)
 	jmp	4b		# print the char and continue
 //////////////////////////////////////////////////////////////////////////////
 1:
-	xorl	%eax, %eax
-	stosb
+	/* get to end of line, print CRLF */
+	movb	$'\n', %al
+	pushl	%eax		# use only AL
+	call	ABS(EXT_C(console_putchar))
+	popl	%eax
+
+	xorl	%eax, %eax	# return 0 for success
+	stosb			# end the command line with 0
 
 	popl	%edi
 	//popl	%esi
 	ret
 99:
-	pushl	ABS(EXT_C(errnum))
-	pushl	$98f
+	pushl	ABS(EXT_C(errnum))	# print error number to prompt user
+	# check current cursor position. if already at left-most,
+	# we need not print CRLF.
+	movzbl	0x450, %eax
+	testb	%al, %al		# Zero mean at left-most (column 0)
+	setz	%al			# skip '\n' if already left-most
+	addl	$98f, %eax
+	pushl	%eax
 	pushl	$0
 	call	EXT_C(grub_sprintf)
 	popl	%eax
@@ -6446,9 +6459,9 @@ VARIABLE(system_functions)
 	.long	ABS(EXT_C(install_partition))	// getxy
 	.long	ABS(EXT_C(install_partition))	// gotoxy
 	.long	ABS(EXT_C(install_partition))	// cls
-	.long	ABS(EXT_C(install_partition))	// setcursor
+	.long	ABS(EXT_C(install_partition))	// setcursor, obsolete
 	.long	EXT_C(nul_terminate)
-	.long	EXT_C(safe_parse_maxint) // safe_parse_maxint_with_suffix
+	.long	EXT_C(safe_parse_maxint) // safe_parse_maxint_with_suffix!
 	.long	EXT_C(substring)
 	.long	ABS(EXT_C(install_partition))	// grub_strstr
 	.long	EXT_C(grub_strlen)
@@ -6456,43 +6469,65 @@ VARIABLE(system_functions)
 	.long	ABS(EXT_C(install_partition))	// grub_strncat
 	.long	EXT_C(grub_strcmp)
 	.long	EXT_C(grub_strcpy)
-	.long	EXT_C(grub_tolower)
-	.long	ABS(EXT_C(install_partition))	// grub_isspace
+	.long	EXT_C(grub_tolower)		// grub_tolower, obsolete
+	.long	ABS(EXT_C(install_partition))	// grub_isspace, obsolete
 	.long	ABS(EXT_C(console_getkey))
 	.long	ABS(EXT_C(console_checkkey))
-	.long	ABS(EXT_C(install_partition))	// grub_sleep
+	.long	ABS(EXT_C(install_partition))	// grub_sleep, obsolete
 	.long	EXT_C(grub_memcmp)
 	.long	EXT_C(grub_memmove)
 	.long	EXT_C(grub_memset)
-	.long	ABS(EXT_C(install_partition))	// mem64
+	.long	ABS(EXT_C(install_partition))	// mem64, obsolete
 	.long	EXT_C(grub_open)
 	.long	EXT_C(grub_read)
 	.long	ABS(EXT_C(install_partition))	// grub_close
-	.long	EXT_C(unicode_to_utf8)
-	.long	EXT_C(rawread)
-	.long	ABS(EXT_C(install_partition))	// rawwrite
+	.long	EXT_C(unicode_to_utf8)		// unicode_to_utf8, obsolete
+	.long	EXT_C(rawread)			// rawread, obsolete
+	.long	ABS(EXT_C(install_partition))	// rawwrite, obsolete
 	.long	EXT_C(devread)
 	.long	ABS(EXT_C(install_partition))	// devwrite
 	.long	ABS(EXT_C(install_partition))	// next_partition
 	.long	EXT_C(open_device)
-	.long	EXT_C(open_partition)		// real_open_partition
+	.long	EXT_C(open_partition)		// real_open_partition!
 	.long	EXT_C(set_device)
-	.long	EXT_C(dir)
-	.long	EXT_C(print_a_completion)
-	.long	EXT_C(print_completions)
+	.long	EXT_C(dir)			// dir, obsolete
+	.long	EXT_C(print_a_completion)	// print_a_completion, obsolete
+	.long	EXT_C(print_completions)	// print_completions, obsolete
 	.long	ABS(EXT_C(install_partition))	// parse_string
 	.long	ABS(EXT_C(install_partition))	// hexdump
 	.long	ABS(EXT_C(install_partition))	// skip_to
 	.long	ABS(EXT_C(install_partition))	// builtin_cmd
 	.long	ABS(EXT_C(install_partition))	// get_datetime
-	.long	ABS(EXT_C(install_partition))	// lba_to_chs
-	.long	ABS(EXT_C(install_partition))	// probe_bpb
-	.long	ABS(EXT_C(install_partition))	// probe_mbr
+	.long	ABS(EXT_C(install_partition))	// lba_to_chs, obsolete
+	.long	ABS(EXT_C(install_partition))	// probe_bpb, obsolete
+	.long	ABS(EXT_C(install_partition))	// probe_mbr, obsolete
 	.long	ABS(EXT_C(install_partition))	// get_mmap_entry
 	.long	ABS(EXT_C(install_partition))	// grub_malloc
 	.long	ABS(EXT_C(install_partition))	// grub_free
 	.long	EXT_C(list_partitions)
 	.long	ABS(EXT_C(realmode_run))
+	.long	0				// reserved 1
+	.long	0				// reserved 2
+	.long	0				// reserved 3
+	.long	0				// reserved 4
+	.long	0				// reserved 5
+	.long	0				// reserved 6
+	.long	0				// reserved 7
+	.long	EXT_C(dir)			// moved 01
+	.long	EXT_C(print_a_completion)	// moved 02
+	.long	EXT_C(print_completions)	// moved 03
+	.long	ABS(EXT_C(install_partition))	// moved 04, lba_to_chs
+	.long	ABS(EXT_C(install_partition))	// moved 05, probe_bpb
+	.long	ABS(EXT_C(install_partition))	// moved 06, probe_mbr
+	.long	EXT_C(unicode_to_utf8)		// moved 07
+	.long	EXT_C(rawread)			// moved 08
+	.long	ABS(EXT_C(install_partition))	// moved 09, rawwrite
+	.long	ABS(EXT_C(install_partition))	// moved 10, setcursor
+	.long	EXT_C(grub_tolower)		// moved 11
+	.long	ABS(EXT_C(install_partition))	// moved 12, grub_isspace
+	.long	ABS(EXT_C(install_partition))	// moved 13, grub_sleep
+	.long	ABS(EXT_C(install_partition))	// moved 14, mem64
+
 
 /*
  * The C code for a grub4dos executable may have defines as follows:
@@ -6539,18 +6574,17 @@ VARIABLE(next_partition_buf)
 VARIABLE(quit_print)
 	.long	0
 //VARIABLE(buf_drive)
-	.long	-1
+	.long	-1	// obsolete
 //VARIABLE(buf_track)
-	.long	-1
-//	.long	0
+	.long	-1	// obsolete
 VARIABLE(filesystem_type)
 	.long	0
 //VARIABLE(query_block_entries)
-	.long	0
+	.long	0	// obsolete
 
 #if 1	/* this group of variables are not used by wee */
 //VARIABLE(map_start_sector)
-	.long	0
+	.long	0	// obsolete
 	.long	0	// ABS(EXT_C(buf_geom))
 	.long	0	// ABS(EXT_C(tmp_geom))
 	.long	0	// ABS(EXT_C(term_table))
@@ -6560,8 +6594,8 @@ VARIABLE(current_term)
 #endif
 
 //VARIABLE(fsys_type)
-	.long	NUM_FSYS
-	.long	NUM_FSYS
+	.long	NUM_FSYS	// obsolete
+	.long	NUM_FSYS	// obsolete
 
 #if 1	/* this group of variables are not used by wee */
 VARIABLE(graphics_inited)
@@ -6580,6 +6614,16 @@ VARIABLE(gzip_filemax)
 	.long	0
 	.long	0
 #endif
+	.long	0	// reserved 1
+	.long	0	// reserved 2
+	.long	0	// reserved 3
+	.long	0	// reserved 4
+	.long	0	// reserved 5
+	.long	0	// reserved 6
+	.long	0	// reserved 7
+	.long	0	// reserved 8
+	.long	0	// reserved 9
+	.long	0	// reserved 10
 
 #endif /* ! STAGE1_5 */
 
