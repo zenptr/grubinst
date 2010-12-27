@@ -504,7 +504,7 @@ int memcheck (unsigned long long addr, unsigned long long len);
 int grub_putstr (const char *str);
 unsigned int grub_sleep (unsigned int seconds);
 
-int rawread (unsigned long drive, unsigned long long sector, unsigned long long byte_offset, unsigned long byte_len, unsigned long long buf, unsigned long write);
+int rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write);
 int devread (unsigned long long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write);
 
 /* Parse a device string and initialize the global parameters. */

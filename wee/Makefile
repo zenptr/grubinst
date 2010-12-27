@@ -5,7 +5,7 @@ all: stage2_size.h wee63.mbr
 wee63start: wee63start.o
 	objcopy -O binary $< $@
 pre_stage2: asm.o builtins.o disk_io.o fsys_ext2fs.o fsys_fat.o fsys_ntfs.o
-	gcc -o $@ -nostdlib -Wl,-N -Wl,-Ttext -Wl,308200 -Wl,-N asm.o builtins.o disk_io.o fsys_ext2fs.o fsys_fat.o fsys_ntfs.o
+	gcc -o $@ -nostdlib -Wl,-N -Wl,-Ttext -Wl,308200 -Wl,-N -Wl,--build-id=none asm.o builtins.o disk_io.o fsys_ext2fs.o fsys_fat.o fsys_ntfs.o
 	objcopy -O binary $@
 	echo -n -e "\0260\002\032\0316" >> $@
 
@@ -27,7 +27,7 @@ wee63start.o: wee63start.S stage2_size.h
 	gcc -c $<
 
 .c.o:
-	gcc -Os -fno-stack-protector -fno-builtin -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef -c $<
+	gcc -Os -fno-stack-protector -fno-builtin -mpreferred-stack-boundary=2 -momit-leaf-frame-pointer -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef -c $<
 
 clean:
 	rm -f *.o wee63start pre_stage2
