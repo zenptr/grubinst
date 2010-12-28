@@ -50,11 +50,14 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
   */
 #include "grub4dos.h"
 #include "fat.h"
+#define SKIP_LINE		0x100
+#define SKIP_NONE		0
+#define SKIP_WITH_TERMINATE	0x200
 #define f_buf_sz 0x300000
-static char *f_buf;
+static char *f_buf = NULL;
 static int fat_func(char *arg,int flags);
-static unsigned long cur_drive;		//grub4dos drive num for FatFs Module
-static unsigned long cur_partition; 	//grub4dos partition num for FatFs Module
+static unsigned long cur_drive = 0L;		//grub4dos drive num for FatFs Module
+static unsigned long cur_partition = 0L; 	//grub4dos partition num for FatFs Module
 static FATFS fs;
 
 unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the following comment. */
@@ -97,9 +100,10 @@ static char fat_err[][100]={
 int
 main (char *arg,int flags)
 {
-//	void *p = &main;
-//	char *arg = p - (*(int *)(p - 8));
-//	int flags = (*(int *)(p - 12));
+	if (*(int *)0x8278 < 20101228)
+	{
+		return !printf("Err grub4dos version\n");
+	}
 	if ((f_buf = malloc(f_buf_sz)) == NULL)
 		return 0;
 	int ret=fat_func (arg , flags);
@@ -133,7 +137,7 @@ static int fat_init (void)
 */
 static char* fat_set_path(char *arg)
 {
-	if (! arg) return 0;
+//	if (! arg) return 0;
 	if (*arg == '/')
 	{
 		return arg;
@@ -143,10 +147,7 @@ static char* fat_set_path(char *arg)
 	/*设置要操作的FAT分区磁盘号和分区号供FatFs模块使用*/
 	cur_drive = current_drive;
 	cur_partition = current_partition;
-	char *P=strstr(arg,"/");
-	if (! P || !P[1]) return 0;
-	nul_terminate(P);
-	return P;
+	return strstr(arg,"/");
 }
 
 #if F_DIR
@@ -330,21 +331,20 @@ static FRESULT fat_copy (char *arg)
 	else Mode |= FA_CREATE_NEW;
 
 	from = arg;
-	to = skip_to (0, arg);
-	nul_terminate(arg);
+	to = skip_to (SKIP_WITH_TERMINATE, arg);
 	to = fat_set_path(to);
 
 	if (!to) 
 	{
 		/*如果只提供了源文件名，则目标文件名使用来源文件名复制到当前根目录下*/
-		char *P = from;
-		while(P = strstr(P,"/")) to = P++;
+		char *P = to = from;
+		while(P = strstr(P,"/"))
+		   to = P++;
 	}
 		else if (to[strlen(to)-1] == '/') /*如果未提供目标名称，则使用原名复制*/
 	{
 		strcpy(new_to,to);
-		char *P = from;
-		to = NULL;
+		char *P = to = from;
 		while (P = strstr(P,"/")) to = ++P;
 		strncat(new_to,to,255);
 		to=new_to;
@@ -356,7 +356,7 @@ static FRESULT fat_copy (char *arg)
 	res = fat_free_space("",&f_pos);
 	#endif
 
-	if (! open (arg))
+	if (! open (from))
 		return FR_NO_FILE;
 	fil_size = filemax;
 
@@ -589,11 +589,11 @@ DSTATUS disk_initialize (BYTE drv)
 {
 	current_drive = cur_drive;
 	current_partition = cur_partition;
+	#ifdef DEBUG
+		if (debug>1) printf("Current drive:%x,%x,%d,%d\n",current_drive,current_partition,fs.id,fs.fs_type);
+	#endif
 	if (real_open_partition(0))
 	{
-		#ifdef DEBUG
-		if (debug>1) printf("Current drive:%x,%x,%d,%d\n",current_drive,current_partition,fs.id,fs.fs_type);
-		#endif
 		return 0;
 	}
 	return STA_NOINIT;
@@ -624,7 +624,7 @@ DRESULT disk_read (
 	BYTE count		/* Number of sectors to read (1..255) */
 )
 {
-	if (! devread ((unsigned long)sector, 0L, (unsigned long long)count << _SS_BIT ,(unsigned long long)(unsigned int)buff, GRUB_READ))
+	if (! devread ((unsigned long long)sector, 0L, (unsigned long long)count << _SS_BIT ,(unsigned long long)(unsigned int)buff, GRUB_READ))
 	{
 		return RES_PARERR;
 	}
@@ -648,7 +648,7 @@ DRESULT disk_write (
 	BYTE count			/* Number of sectors to write (1..255) */
 )
 {
-	if (! devread ((unsigned long)sector, 0L,(unsigned long long)count << _SS_BIT ,(unsigned long long)(unsigned int)buff, GRUB_WRITE))
+	if (! devread ((unsigned long long)sector, 0L,(unsigned long long)count << _SS_BIT ,(unsigned long long)(unsigned int)buff, GRUB_WRITE))
 	{
 		return RES_PARERR;
 	}

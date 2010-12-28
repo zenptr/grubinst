@@ -57,7 +57,7 @@ DRESULT disk_read (
 	BYTE count		/* Number of sectors to read (1..255) */
 )
 {
-	if (! devread ((unsigned long)sector, 0L, (unsigned long long)count << _SS_BIT ,(unsigned long long)(unsigned int)buff, GRUB_READ))
+	if (! devread ((unsigned long long)sector, 0L, (unsigned long long)count << _SS_BIT ,(unsigned long long)(unsigned int)buff, GRUB_READ))
 	{
 		return RES_PARERR;
 	}
