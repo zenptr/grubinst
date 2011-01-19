@@ -494,7 +494,7 @@ drdos:
 			((char *)(&chain_edx))[1] = ((char *)(&current_partition))[2];
 			chain_ebx = 0;
 			HMA_start();   /* no return */
-		} else if ((*(long long *)prog_start | 0xFFFF02LL) == 0x4F43000000FFFFEBLL && (*(((long long *)prog_start)+1) == 0x706D6F435141504DLL))   /* DR-DOS */
+		} else if ((*(long long *)prog_start == 0x501E0100122E802ELL) /* packed with pack101 */ || ((*(long long *)prog_start | 0xFFFF02LL) == 0x4F43000000FFFFEBLL && (*(((long long *)prog_start)+1) == 0x706D6F435141504DLL)))   /* DR-DOS */
 		{
 			chain_boot_IP = 0x00700000;
 			chain_load_to = 0x0700;

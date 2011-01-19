@@ -436,8 +436,9 @@ hard_stop:
 	jc	4f		/* exceeding 4G */
 	movl	%ecx, %edx	/* within 4G */
 4:
-	cmpl	$0x3C00000, 8(%di)	/* length < 60M ? */
-	jnb	3f			/* success */
+	//cmpl	$0x3C00000, 8(%di)	/* length < 60M ? */
+	//jnb	3f			/* success */
+	jmp	3f
 2:
 	testl	%ebx, %ebx
 	jnz	1b
@@ -4616,7 +4617,7 @@ ENTRY(list_partitions)
 	jne	1f
 	ret
 1:
-	/* initialize buffer end pionter */
+	/* initialize buffer end pointer */
 	movl	$(PART_TABLE_BUF+16), PART_TABLE_BUF+4
 
 	pushl	%ebp

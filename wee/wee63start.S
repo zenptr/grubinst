@@ -60,13 +60,19 @@ _start1:
 
 	/* No cli, we use stack! BIOS or caller usually sets SS:SP=0000:0400 */
 
-	jmp	1f	/* FAT32/NTFS routine comes to offset 0 */
+	/* Acer will hang up on USB boot if the leading byte is 0xEB(jmp).
+	 * You might want to use 0x90 0x90 or 0x33 0xC0(xor AX,AX) instead.
+	 */
+	jmp	1f
 
 	. = _start1 + 0x02
 
 	.byte	0x90	/* MS uses it to indicate a valid floppy */
 
 	. = _start1 + 0x03
+
+	/* if the above "jmp" get changed, here it goes. */
+	//jmp	1f	/* it occupies the first 2 bytes of the OEM string. */
 
 			/* BPB of FAT can be placed here. */
 
