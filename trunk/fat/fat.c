@@ -387,11 +387,11 @@ static FRESULT fat_copy (char *arg)
 
 	while (br)
 	{
-		#ifdef DEBUG
+		#ifdef DEBUG1
 		if (debug) printf("Read Bytes:%d\n",br);
 		#endif
 		res = f_write(&file, f_buf, br, &bw);
-		#ifdef DEBUG
+		#ifdef DEBUG1
 		if (debug) printf("Write Bytes:%d\n", bw);
 		#endif
 		if (res || bw < br || f_pos >= fil_size) break;
@@ -575,6 +575,7 @@ static int fat_func (char *arg,int flags)
 	#else
 		printf("FAT error: %d\n",res);
 	#endif
+		errnum = 0xff;
 	}
 	return !res;
 };
@@ -589,7 +590,7 @@ DSTATUS disk_initialize (BYTE drv)
 {
 	current_drive = cur_drive;
 	current_partition = cur_partition;
-	#ifdef DEBUG
+	#ifdef DEBUG1
 		if (debug>1) printf("Current drive:%x,%x,%d,%d\n",current_drive,current_partition,fs.id,fs.fs_type);
 	#endif
 	if (real_open_partition(0))

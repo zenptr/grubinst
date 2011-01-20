@@ -49,9 +49,6 @@ struct broder {
 	unsigned char menu_box_b;
 } __attribute__ ((packed));
 
-static int menuset_func(char *arg, int flags);
-
-
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
@@ -67,16 +64,7 @@ asm(".long 0xBCBAA7BA");
  * file. Do not insert any other asm lines here.
  */
 
-int
-main ()
-{
-	void *p = &main;
-	char *arg = p - (*(int *)(p - 8));
-	int flags = (*(int *)(p - 12));
-	return menuset_func (arg , flags);
-}
-
-static int menuset_func (char *arg, int flags)
+static int main (char *arg, int flags)
 {
 	struct broder tmp_broder = {218,191,192,217,196,179,2,76,2,0,0};
 	char *p=(char *)&tmp_broder;

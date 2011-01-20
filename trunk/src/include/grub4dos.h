@@ -128,8 +128,6 @@ typedef enum
 #define next_partition_ext_offset	((*(unsigned long ***)0x8304)[8])
 #define next_partition_buf		((*(char ***)0x8304)[9])
 #define quit_print		((*(int **)0x8304)[10])
-//#define buf_drive	((*(int **)0x8304)[11])
-//#define buf_track	((*(int **)0x8304)[12])
 #define filesystem_type ((*(int **)0x8304)[13])
 //#define query_block_entries ((*(long **)0x8304)[14])
 //#define map_start_sector ((*(unsigned long **)0x8304)[15])
@@ -175,6 +173,8 @@ typedef enum
 #define filepos (*(unsigned long long *)0x8328)
 #define debug (*(int *)0x8330)
 #define current_slice (*(unsigned long *)0x8334)
+#define buf_drive	(*(int *)0x8340)
+#define buf_track	(*(int *)0x8348)
 
 #define GRUB_READ 0xedde0d90
 #define GRUB_WRITE 0x900ddeed
@@ -224,7 +224,6 @@ typedef enum
 #define malloc ((void *(*)(int size))((*(int **)0x8300)[50]))
 #define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
 
-#if 0
 /*
 int
 devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
@@ -252,8 +251,6 @@ rawwrite (unsigned long drive, unsigned long sector, char *buf)
 #define isspace ((int (*)(int))((*(int **)0x8300)[72]))
 #define sleep ((unsigned int (*)(unsigned int))((*(int **)0x8300)[73]))
 #define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[74]))
-
-#endif
 
 
 #define RAW_ADDR(x) (x)

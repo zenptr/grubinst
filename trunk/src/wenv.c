@@ -222,8 +222,11 @@ static char *skip_next (int flags,char *arg);
 
 static int read_val(char **str_ptr,unsigned long long *val);	// 读取一个数值(用于计算器)
 static int ascii_unicode(const char *ch, char *addr);	// unicode编码转换
-static void lower(char *string);			// 小写转换
-static void upper(char *string);			// 大写转换
+void case_convert(char *ch,char flag);
+#define upper(string)	case_convert(string,'a')
+#define lower(string)	case_convert(string,'A')
+//static void lower(char *string);			// 小写转换
+//static void upper(char *string);			// 大写转换
 //static char* next_line(char *arg, char eol);				// 读下一命令行
 static int strcpyn(char *dest,const char *src,int n);	// 复制字符串，最多n个字符
 static int printfn(char *str,int n);				//最多显示n个字符
@@ -421,7 +424,7 @@ static int wenv_func(char *arg, int flags)
 	int i;
 	wenv_flags = 0;
 	char *cmd_buff;
-	if ((cmd_buff = malloc(MAX_ARG_BUFF)) == NULL)
+	if ((cmd_buff = malloc(0x800)) == NULL)
 		return 0;
 
 	while ( *p && (arg = p) != NULL)
@@ -1817,7 +1820,21 @@ static int ascii_unicode(const char *ch,char *addr)
 	sprintf(&addr[i],"\\0\\0\0");
 	return 1;
 }
-// 小写转大写
+// 大小写转换
+void case_convert(char *ch,char flag)
+{
+    if (flag != 'a' && flag != 'A')
+        return;
+    while (*ch)
+    {
+        if ((unsigned char)(*ch-flag) < 26)
+        {
+            *ch ^= 0x20;
+        }
+        ++ch;
+    }
+}
+#if 0
 static void upper(char *string)
 {
 	while (*string)
@@ -1842,6 +1859,7 @@ static void lower(char *string)
 	}
 	return;
 }
+#endif
 /* 比较字符串前n个字符(s1不分大小写), 相等返回0
  * n>0 时，仅比较前n个字符
  * n=0 时，s1须以结束符、空格、制表符、等号分隔才会返回相等的结果
