@@ -99,9 +99,15 @@ static void skip_eol(char *line)
 		return;
 	while (*line)
 	{
-		line = skip_to(1,line);
 		if (*line == ';')
 			break;
+		if (*line == '\"')
+		{
+			while (*++line && *line != '\"')
+				;
+		}
+		if (*line)
+			++line;
 	}
 	if (*line != ';')
 		return;

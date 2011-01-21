@@ -827,14 +827,19 @@ static void trim_p(char **p_str)
 	char *p=*p_str;
 	while (*p == ' ')
 		p++;
-	if (*p == QUOTE_CHAR)
-		p++;
 	*p_str = p;
 	while (*p) p++;
 
 	while (*--p == ' ')
 		;
-	if (*p != QUOTE_CHAR) p++;
+	if (*p != QUOTE_CHAR || **p_str != QUOTE_CHAR)
+	{
+		p++;
+	}
+	else
+	{
+		++(*p_str);
+	}
 	*p = '\0';
 	return;
 }
@@ -989,7 +994,7 @@ static int for_func(char *arg, int flags)
 				return !(errnum = ERR_BAD_ARGUMENT);
 			}
 		}
-		
+
 		#ifdef DEBUG
 		if (debug >1)
 			printf("delims:%s :: eol=%c :: tokens:%x\n",delims,eol,tokens);
@@ -1079,7 +1084,7 @@ static int for_func(char *arg, int flags)
 			#endif
 			strcpyn(command_buff,cmd,MAX_ENV_LEN); //复制命令到缓冲区，因为要对命令进行字符串替换
 			split_ex(p1,delims,s,tokens);//分隔字符串.
-			for (i = 0;s[i];i++)
+			for (i = 0;i<10;i++)
 			{
 				#ifdef DEBUG
 				if (debug > 1)
