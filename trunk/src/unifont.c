@@ -32,7 +32,7 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net
  * 2010-03-07
- * last modify 2010-10-24
+ * last modify 2011-02-10
  */
 #include "font/font.h"
 #include "grub4dos.h"
@@ -116,13 +116,9 @@ asm(".long 0xBCBAA7BA");
  */
 
 int
-main ()
+main (char *arg,int flags)
 {
-	void *p = &main;
-	char *arg = p - (*(int *)(p - 8));
-	int flags = (*(int *)(p - 12));
-
-	while(arg[0]==' ' || arg[0]=='\t') arg++;
+	while(*arg == ' ' || *arg == '\t') arg++;
 	if (memcmp(arg,"--unload",8) == 0)
 	{
 		unifont_unload();
@@ -148,7 +144,7 @@ main ()
 		close();
 		if (InitFont())
 		{
-			memmove((char *)BASE_FONT_ADDR + filemax ,p,(int)&GRUB - (int)p );
+			memmove((char *)BASE_FONT_ADDR + filemax ,&main,(int)&GRUB - (int)&main );
 			ushFontReaded = 1;
 			FONT_WIDTH = 10;
 			return fontfile_func(arg,flags);
@@ -197,7 +193,7 @@ graphics_cursor (int set)
 	ch1 = ch & 0xff;
 	pat += (ch1 << 4);
 
-	if (ushFontReaded && ((ch & 0xff00) || (ALL_FONT && ch1 > 0x20 && ch1 != 218 && ch1 != 191 && ch1 != 192 && ch1 != 217 && ch1 != 196 && ch1 != 179)))
+	if (ushFontReaded && ((ch & 0xff00) || (ALL_FONT && ch1 > 0x20 /*&& ch1 != 218 && ch1 != 191 && ch1 != 192 && ch1 != 217 && ch1 != 196 && ch1 != 179*/)))
 	{
 		WORD bytesPerLine = 0;
 		int dotpos;
@@ -332,6 +328,93 @@ graphics_scroll (void)
 	no_scroll = 0;
 }
 
+/*
+	转换utf8字符串为unicode.
+	ch指向utf8的第一个字符,n是长度.
+	注: 本函数是配合scan_utf8函数使用的.
+*/
+int utf8_unicode(unsigned long *ch,int n)
+{
+	unsigned long *c1 = ch + 1;
+	if (*ch == 196 && *ch == *(ch-1) && *c1 == 191)
+	{
+		return 0;
+	}
+	int c = *ch;
+	int i;
+	/*检测该utf8字符串长度是否为n*/
+	for (i = 0; c & 0x80;++i)
+	{
+		c <<= 1;
+	}
+
+	if (i != n)
+		return 0;
+
+	c1 = ch + 1;
+	c &= 0xff;
+	c >>= n;
+	for (i = n;i>1;--i)
+	{
+		c <<= 6;
+		c |= *c1 & 0x3f;
+		*c1++ = 0;
+	}
+	*ch = c | (*ch & 0xffff0000);
+	return 1;
+}
+
+void scan_utf8(void)
+{
+	int i,ch;
+	unsigned long *p_text = &TEXT[fonty][fontx];
+	for (i=1; i<=6 ;--p_text)
+	{
+		ch = *p_text & 0xFFC0;
+		/*
+			根据UTF8的规则
+			1.每个字符的最高位必须为1即0x80,
+			2.首个字符前面至少两个1,即像110xxxxx;
+			3.后面的字符必须是二进制10xxxxxx;
+			
+			因为这里是从字符的后面往前面判断的
+			所以只要判断该字符的前两位为1即0xC0,那该UTF8的字符串就从这个地方开始.
+		*/
+		if (ch == 0xC0)
+		{
+			/*用utf8_unicode函数进行转换,长度为i,如果长度不符合则返回0*/
+			if (utf8_unicode(p_text,i))
+			{
+				--i;
+				if (fontx < i)
+				{
+					if (fonty == 0)
+						return;
+					i -= fontx;
+					--fonty;
+					fontx = x1 - 1;
+					if (i == 1)
+					{
+						unsigned long utf8_tmp = *p_text;
+						graphics_setxy(fontx,fonty);
+						putchar(' ');
+						TEXT[fonty][fontx] = utf8_tmp;
+						return;
+					}
+				}
+				fontx -= i;
+				graphics_setxy(fontx,fonty);
+			}
+			return;
+		}
+		else if (ch != 0x80)
+		{
+			return;
+		}
+		++i;
+	}
+}
+
 void
 graphics_putchar (int ch)
 {
@@ -350,26 +433,27 @@ graphics_putchar (int ch)
         current_term->GOTOXY(x0, fonty);
         //graphics_cursor(1);
         return;
-    } else if (ch & 0xff00)
+    }
+    else if (ch < 0)//如果ch小于(字符大于127如果没有使用unsigned char那传过来的参数就是负数了)
+    {
+		ch &= 0xff;
+	}
+	 else if (ch & 0xff00)
     {
 		if (fontx+1>=x1) graphics_putchar(' ');
+		TEXT[fonty][fontx+1] = 0;
     }
-    //graphics_cursor(0);
-
     TEXT[fonty][fontx] = ch;
 /*
     if (graphics_current_color == graphics_highlight_color)//if (graphics_current_color & 0xf0)
         text[fonty * 80 + fontx] |= 0x10000;//0x100;
 */
-	int w_char=1;
-	if (ch &= 0xff00)
-    {
-		TEXT[fonty][fontx +1] = 0;
-//		w_char++;
-	}
+	if ((ch & 0xFF80) == 0x80)
+		scan_utf8();
+
     graphics_cursor(0);
 
-    if (fontx + w_char >= x1)
+    if (fontx + 1 >= x1)
     {
         if (fonty + 1 < y1)
             graphics_setxy(x0, fonty + 1);
@@ -379,7 +463,7 @@ graphics_putchar (int ch)
             graphics_scroll();
 	}
     } else {
-		graphics_setxy(fontx + w_char, fonty);
+		graphics_setxy(fontx + 1, fonty);
     }
 
     graphics_cursor(1);
