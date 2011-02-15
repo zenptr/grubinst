@@ -223,6 +223,8 @@ typedef enum
 #define get_mmap_entry ((int (*)(char *,int))((*(int **)0x8300)[49]))
 #define malloc ((void *(*)(int size))((*(int **)0x8300)[50]))
 #define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
+#define realmode_run ((int (*)(long regs_ptr))((*(int **)0x8300)[53]))
+
 
 /*
 int

@@ -104,9 +104,15 @@ struct vdata
 	unsigned long dev;
 } __attribute__ ((packed));
 //#define DEBUG
+#if 0
 #define VDATA	 ((struct vdata *)(0x600000+0x4000))
 #define FILE_BUF ((char *)0x684000)
 #define PCI ((struct pci_dev *)0x600000)
+#else
+static struct vdata *VDATA = NULL;
+static struct pci_dev *PCI = NULL;
+static char *FILE_BUF = NULL;
+#endif
 static int out_fmt = 0;
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
@@ -125,12 +131,17 @@ asm(".long 0xBCBAA7BA");
  
 int chkpci_func (char *,int);
 
-int main (void)
+int main (char *arg,int flags)
 {
-	void *p = &main;
-	char *arg = p - (*(int *)(p - 8));
-	int flags = (*(int *)(p - 12));
-	return chkpci_func (arg , flags);
+	char *p = malloc(0x84000);
+	if (p == NULL)
+		return 0;
+	PCI = (struct pci_dev *)p;
+	VDATA = (struct vdata *)(p+0x4000);
+	int ret = chkpci_func (arg , flags);
+	free(p);
+	free(FILE_BUF);
+	return ret;
 }
 
 int inl(int port)
@@ -221,13 +232,16 @@ unsigned char *find_line(char *P,char ch,char ch1)
 {
 	while(*P)
 	{
-		if (*P++ == 0xa)
+		if (*P == 0xd || *P == 0xa)
 		{
+			while (isspace(*P))
+				++P;
 			if (*P == ch1)
 				return NULL;
 			if ( ch == 0 || *P == ch)
 				return P;
 		}
+		++P;
 	}
 	return NULL;
 }
@@ -282,7 +296,7 @@ int show_dev(struct pci_dev *pci)
 					break;
 				}
 			}
-			P = skip_to (0, P);				
+			P = skip_to (0, P);
 			while (*P && *P != 0xD)
 				putchar(*P++);
 			putchar('\n');
@@ -301,22 +315,30 @@ int show_dev(struct pci_dev *pci)
 int chkpci(struct pci_dev *end)
 {
 	struct pci_dev *pci;
-	char *p1,*P = find_line (FILE_BUF, 0 , 0);//跳过第一行。!
+	char *p1,*p2,*P;
 	unsigned long t;
 	struct pci_dev dev;
-	if (*P != '$')/*输出文件头部份*/
+	p1 = P = skip_to(0x100 | ';',FILE_BUF);//跳过第一行。!
+	/*输出文件头部份*/
+	while (*P != '$')
 	{
-		while (*P && P[1] != '$') putchar(*P++);
-		putchar('\n');
+		p1 = skip_to(0x100 | ';',P);
+		printf("%s\n",P);
+		P = p1;
 	}
-	while (p1 = P = find_line (P, '$' , 0))
+
+	while ((P = p1))
 	{
-		if (*(unsigned long *)(P+1) & 0XFFDFDFDF != 0x5C494350) //PCI\
+		p1 = skip_to (0x100 | ';', P);
+		if (*P != '$')
+			continue;
+		if (*(unsigned long *)(P+1) & 0XFFDFDFDF != 0x5C494350) //PCI
 			continue;
 		if (*(unsigned long *)(P+5) & 0xFFDFDFDF != VEN)//check VEN_
 			continue;
 		if (*(unsigned long *)(P+14) & 0xFFDFDFDF != DEV)// check DEV_
 			continue;
+		p2 = P + 1;
 		memset (&dev,0,sizeof(struct pci_dev));
 		P = P + 9;
 		t = asctohex(P);
@@ -361,15 +383,22 @@ int chkpci(struct pci_dev *end)
 				pci->venID = 0;
 				if (out_fmt)
 				{
-					while (*++p1 && *p1 != '\r' && *p1 != '\n' && *p1 != ';') putchar(*p1);
+					printf("%s\n",p2);
 				}
 				else
 				{
-					for (P = find_line(P, 0, 0);*P == '$';P = find_line(P, 0, 0));
-					//0x240a \n$ 也就是以$开头的行。
-					while (*P && *(unsigned short *)P != 0x240a) putchar(*P++);//输出内容直到文件尾或下一个以$开始的行。
+					while (*p1 == '$')
+					{
+						p1 = skip_to (0x100 | ';',p1);
+					}
+					while (p1 && *p1 != '$')
+					{
+						p2 = p1;
+						p1 = skip_to (0x100 | ';',p1);
+						printf("%s\n",p2);
+					}
+					//输出内容直到文件尾或下一个以$开始的行。
 				}
-				putchar('\n');
 				break;
 			}
 		}
@@ -386,7 +415,6 @@ int chkpci_func(char *arg,int flags)
 	char sc[6] = "\xff\xff\xff\xff\xff";
 	char cc[6] = "\xff\xff\xff\xff\xff";
 	struct pci_dev *devs = PCI;
-	*(unsigned long *)FILE_BUF = 0;
 	int i;
 	if (! pcibios_init(0)) return 0;
 	while (*arg)
@@ -454,21 +482,17 @@ int chkpci_func(char *arg,int flags)
 	{
 		if (! open(arg))
 			return 0;
-		if (! read ((unsigned long long)(int)FILE_BUF,0x100000,GRUB_READ))
+		if ((FILE_BUF = malloc(filemax)) == NULL)
+			return 0;
+		if (! read ((unsigned long long)(int)FILE_BUF,-1,GRUB_READ))
 			return 0;
 		FILE_BUF[filemax] = 0;
-		if (*(unsigned long *)FILE_BUF != 0X24494350) 
+		if (*(unsigned long *)FILE_BUF != 0X24494350)  //检测文件头是否PCI$
 		{
 			read_cfg(filemax);
 		}
 	}
 
-/* 循环查找所有设备.
-	for (bus=0;bus<5;bus++)
-	  for (dev=0;dev<32;dev++)
-	    for (func=0;func<8;func++)
-		    regVal = 0x80000000 | bus << 16 | dev << 11 | func << 8;
-*/
 	int check = (cc[0] == '\xff')?0x100:1;
 
 	for (regVal = 0x80000000;regVal < 0x8005FF00;regVal += 0x100)
