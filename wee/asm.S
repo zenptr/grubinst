@@ -2508,13 +2508,17 @@ ENTRY(realmode_run)
 
 	movl	0x38(%bp), %ecx		/* CS */
 	movl	0x34(%bp), %edx		/* EIP */
-	incl	%ecx
-	jz	3f
+	incl	%ecx			/* CS = -1? */
+	jz	3f			/* yes, jump to INTxx code */
 
 	/* run user defined code */
-	decl	%ecx
-	movw	%dx, ABS(1f)
-	movw	%cx, ABS(1f + 2)
+	decl	%ecx			/* CS */
+	/* 0xEA might have been changed to 0xCD previously, so we must restore
+	 * it back to 0xEA. 
+	 */
+	movb	$0xEA, ABS(1f-1)	/* opcode for "far jump" */
+	movw	%dx, ABS(1f)		/* IP in the far jump instruction */
+	movw	%cx, ABS(1f + 2)	/* CS in the far jump instruction */
 
 	/* set return address for user code to return */
 	movl	$ABS(4f), %ecx
@@ -2634,6 +2638,15 @@ ENTRY(realmode_run)
 	repz movsl
 
 	/* the stack should not change! */
+
+	/* fix the pushed ESPs before checking */
+	movl	$32, %ecx
+	subl	%ecx, (32 + 12)(%esp)
+	movl	$64, %ecx
+	subl	%ecx, (64 + 12)(%esp)
+	movl	$96, %ecx
+	subl	%ecx, (96 + 12)(%esp)
+
 	movl	%esp, %esi
 	leal	32(%esp), %edi
 	movl	$8, %ecx

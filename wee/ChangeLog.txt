@@ -1,4 +1,8 @@
 
+2011-02-17 fixed a bug of "0xEA not properly restored" in realmode_run(asm.S).
+2011-02-16 fixed a bug on stack checking in realmode_run(asm.S).
+2011-02-01 prevent IO.SYS from wiping out int32-int3F.
+2011-01-31 realmode .com style program support.
 2011-01-14 add comments on how to alter the leading 0xEB for buggy Acer.
 2011-01-07 (Roy)supported drbio.sys that is packed with pack101.
 

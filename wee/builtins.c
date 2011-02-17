@@ -198,6 +198,7 @@ command_func (char *arg/*, int flags*/)
 	unsigned long j;
 	unsigned long psp_len;
 	unsigned long prog_start;
+	unsigned long long end_signature;
 
 	for (j = 1;
 		(unsigned long)&mem_alloc_array_start[j] < mem_alloc_array_end
@@ -241,8 +242,8 @@ command_func (char *arg/*, int flags*/)
 	}
 
 	/* check exec signature. */
-	if (*(unsigned long long *)(prog_start + (unsigned long)filemax - 8)
-		!= 0xBCBAA7BA03051805ULL)
+	end_signature = *(unsigned long long *)(prog_start + (unsigned long)filemax - 8);
+	if (end_signature != 0xBCBAA7BA03051805ULL)
 	{
 		unsigned long boot_entry;
 		unsigned long load_addr;
@@ -430,6 +431,91 @@ non_linux:
 		 */
 		if (load_length < 512 || load_length > 0x80000)
 			return ! (errnum = ERR_EXEC_FORMAT);
+		if (end_signature == 0x85848F8D0C010512ULL)	/* realmode */
+		{
+			unsigned long ret;
+			struct realmode_regs {
+				unsigned long edi; // input and output
+				unsigned long esi; // input and output
+				unsigned long ebp; // input and output
+				unsigned long esp; //stack pointer, input
+				unsigned long ebx; // input and output
+				unsigned long edx; // input and output
+				unsigned long ecx; // input and output
+				unsigned long eax;// input and output
+				unsigned long gs; // input and output
+				unsigned long fs; // input and output
+				unsigned long es; // input and output
+				unsigned long ds; // input and output
+				unsigned long ss; //stack segment, input
+				unsigned long eip; //instruction pointer, input
+				unsigned long cs; //code segment, input
+				unsigned long eflags; // input and output
+			};
+
+			struct realmode_regs regs;
+
+			if (load_length + 0x10100 > ((*(unsigned short *)0x413) << 10))
+				return ! (errnum = ERR_WONT_FIT);
+
+			ret = grub_strlen (arg); /* command-tail count */
+#define INSERT_LEADING_SPACE 0
+#if INSERT_LEADING_SPACE
+			if (ret > 125)
+#else
+			if (ret > 126)
+#endif
+				return ! (errnum = ERR_BAD_ARGUMENT);
+
+			/* first, backup low 640K memory to address 2M */
+			grub_memmove ((char *)0x200000, 0, 0xA0000);
+			
+			/* copy command-tail */
+			if (ret)
+#if INSERT_LEADING_SPACE
+				grub_memmove ((char *)0x10082, arg, ret++);
+#else
+				grub_memmove ((char *)0x10081, arg, ret);
+#endif
+
+			/* setup offset 0x80 for command-tail count */
+#if INSERT_LEADING_SPACE
+			*(short *)0x10080 = (ret | 0x2000);
+#else
+			*(char *)0x10080 = ret;
+#endif
+
+			/* end the command-tail with CR */
+			*(char *)(0x10081 + ret) = 0x0D;
+
+			/* clear the beginning word of DOS PSP. the program
+			 * check it and see it is running under grub4dos.
+			 * a normal DOS PSP should begin with "CD 20".
+			 */
+			*(short *)0x10000 = 0;
+
+			/* copy program to 1000:0100 */
+			grub_memmove ((char *)0x10100, (char *)prog_start, load_length);
+
+			/* setup DS, ES, CS:IP */
+			regs.cs = regs.ds = regs.es = 0x1000;
+			regs.eip = 0x100;
+
+			/* setup FS, GS, EFLAGS and stack */
+			regs.ss = regs.esp = regs.fs = regs.gs = regs.eflags = -1;
+
+			/* for 64K .com style command, setup stack */
+			if (load_length < 0xFF00)
+			{
+				regs.ss = 0x1000;
+				regs.esp = 0xFFFE;
+			}
+
+			ret = realmode_run ((unsigned long)&regs);
+			/* restore memory 0x10000 - 0xA0000 */
+			grub_memmove ((char *)0x10000, (char *)0x210000, ((*(unsigned short *)0x413) << 10) - 0x10000);
+			return ret;
+		}
 		if ((unsigned long)filemax <= (unsigned long)1024)
 		{
 			/* check 55 AA */
@@ -486,6 +572,30 @@ drdos:
 		{
 			//boot_drive = current_drive;
 			//install_partition = current_partition;
+
+			/* to prevent MS from wiping int vectors 32-3F. */
+			/* search these 12 bytes ... */
+			/* 83 C7 08	add di,08	*/
+			/* B9 0E 00	mov cx,0E	*/
+			/* AB		stosw		*/
+			/* 83 C7 02	add di,02	*/
+			/* E2 FA	loop (-6)	*/
+			/* ... replace with NOPs */
+			unsigned long p = prog_start + 0x800;
+			unsigned long q = prog_start + load_length - 16;
+			while (p < q)
+			{
+				if ((*(long *)p == 0xB908C783) &&
+				    (*(long long*)(p+4)==0xFAE202C783AB000ELL))
+				{
+					((long *)p)[2]=((long *)p)[1]=
+						*(long *)p = 0x90909090;
+					p += 12;
+					continue; /* would occur 3 times */
+				}
+				p++;
+			}
+
 			chain_boot_IP = 0x00700000;
 			chain_load_to = 0x0700;
 			chain_load_from = prog_start + 0x800;

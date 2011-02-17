@@ -134,4 +134,35 @@
 
 	Note: The echo executable for grub4dos runs under WEE as well.
 
+==============================================================================
+
+Update 1 (2011-01-31):
+
+		.com style real mode program support
+
+	The supported real mode program is just like a DOS .com file. Its size
+	must be between 512 Bytes and 512 KBytes(inclusive). Note that a DOS
+	.com file does not exceed 64KB.
+
+	The file will be loaded at 1000:0100. DOS style command tail is also
+	supported. The command-tail count is a byte at 1000:0080. The command-
+	tail begins at 1000:0081, ending with CR(0x0D). A word at 1000:0000
+	will be cleared to zero. By contrast a DOS PSP will begin with "CD 20".
+	DS and ES and CS will be set to 0x1000. IP set to 0x0100. If program
+	file length is less than 0xFF00, then SS set to 0x1000 and SP set to
+	0xFFFE. If the file length is no less than 0xFF00, then the default
+	grub4dos stack(at somewhere between 0000:2000 and 0000:7000) is used.
+
+	The program should not change the content of extended memory.
+	The program should not change memory range from 0000:0800 to 0000:FFFF.
+	The program should not change BIOS specific memory.
+
+	The program may return to WEE by a far jump to 0000:8200.
+
+	The program file must end with the following 8-byte signature:
+
+			12  05  01  0C  8D  8F  84  85
+
+	No grub4dos API can be used. So the program could only call BIOS.
+
 

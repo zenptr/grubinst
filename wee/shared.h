@@ -446,9 +446,11 @@ void cmain (void);
 int chain_stage1 (unsigned long segment_offset);
 int console_getkey (void);
 int console_checkkey (void);
+unsigned long realmode_run (unsigned long regs_ptr);
 #define chain_stage1 ((int (*)(unsigned long))((char *)(&chain_stage1) - 0x300000))
 #define console_getkey ((int (*)(void))((char *)(&console_getkey) - 0x300000))
 #define console_checkkey ((int (*)(void))((char *)(&console_checkkey) - 0x300000))
+#define realmode_run ((unsigned long (*)(unsigned long))((char *)(&realmode_run) - 0x300000))
 
 /* Return the data area immediately following our code. */
 int get_code_end (void);
