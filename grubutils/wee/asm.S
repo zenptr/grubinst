@@ -3108,8 +3108,17 @@ ENTRY(console_checkkey)
 
 	.code16
 
+	movl	$500, %ecx
+1:
+	movl	0x46c, %eax	/* get old timer counter */
+
 	sti		/* checkkey needs interrupt on */
 	hlt
+
+	cmpl	0x46c, %eax	/* timer counter changed by int 8? */
+	loopz	1b		/* no change, wait a timer interrupt */
+
+	/* counter changed or timed out. */
 
 	movb	$0x1, %ah
 	int	$0x16
@@ -3559,6 +3568,7 @@ ENTRY(enter_cmdline)
 	incl	%ecx
 	jz	51f
 	decl	%ecx
+	jz	55f
 #if 0	/* QEMU cannot update VGA on buffer change:( */
 	//////////////////////////////////////////////////////////////////
 	/* print the time out, write VGA text buffer */			//

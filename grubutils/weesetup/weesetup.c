@@ -193,7 +193,7 @@ int main( int argc, char *argv[] )
    int  fd;
    int  install_flag	 = 0;
    char *mbr_data        = 0;
-   char *wee63_data      = wee63_mbr;
+   char *wee63_data      = (char *)wee63_mbr;
    char *script_data     = 0;
    char *in_filename     = 0;
    char *out_filename    = 0;

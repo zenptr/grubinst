@@ -1,1 +1,1 @@
-#define STAGE2_SIZE 29532
+#define STAGE2_SIZE 29556

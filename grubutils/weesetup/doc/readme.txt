@@ -21,6 +21,8 @@ weesetup是为了方便安装wee63.mbr而写的程序。支持自定义脚本。
    as well.
 
    Besides, WEE can run 32-bit programs written for it.
+2011-02-28
+	1.升级内置wee63.mbr到最新版.
 
 2011-02-17
 	1.升级内置wee63.mbr到最新版
