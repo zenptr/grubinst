@@ -1,4 +1,5 @@
 
+2011-03-04 set the current root device as the default boot device of grub.exe.
 2011-02-25 fixed endless timeout 0 issue. let checkkey wait a timer interrupt.
 2011-02-17 fixed a bug of "0xEA not properly restored" in realmode_run(asm.S).
 2011-02-16 fixed a bug on stack checking in realmode_run(asm.S).

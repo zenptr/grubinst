@@ -408,6 +408,22 @@ done_initrd:
 		  if (errnum)
 			return 0;
 
+		  {
+			unsigned int p;
+			/* check grub.exe */
+			for (p = (unsigned int)linux_bzimage_tmp_addr; p < (unsigned int)linux_bzimage_tmp_addr + 0x8000; p += 0x200)
+			{
+				if (((*(long long *)(void *)p & 0xFFFF00FFFFFFFFFFLL) == 0x02030000008270EALL) && ((*(long long *)(void *)(p + 0x12) & 0xFFFFFFFFFFLL) == 0x0037392E30LL))
+				{
+					if (*(long *)(void *)(p + 0x80) == 0xFFFFFFFF)//boot_drive
+					{
+						*(long *)(void *)(p + 0x80) = saved_drive;
+						*(long *)(void *)(p + 0x08) = saved_partition;
+					}
+					break;
+				}
+			}
+		  }
 		  ///* Ugly hack.  */
 		  //linux_text_len = text_len;
 
