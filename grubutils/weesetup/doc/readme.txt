@@ -1,10 +1,10 @@
-wee ÊÇÒ»¸öÎ¢ĞÍµÄgrub4dosÓÃÓÚ°²×°µ½Ó²ÅÌmbrÉÏ£¬¿ÉÒÔÓÃÀ´´úÌæÖ®Ç°µÄgrldr.mbr·½°¸¡£
+ï»¿wee æ˜¯ä¸€ä¸ªå¾®å‹çš„grub4dosç”¨äºå®‰è£…åˆ°ç¡¬ç›˜mbrä¸Šï¼Œå¯ä»¥ç”¨æ¥ä»£æ›¿ä¹‹å‰çš„grldr.mbræ–¹æ¡ˆã€‚
 
-Ö§³ÖµÄÎÄ¼şÏµÍ³£º FAT12/16/32/NTFS EXT2/3/4
+æ”¯æŒçš„æ–‡ä»¶ç³»ç»Ÿï¼š FAT12/16/32/NTFS EXT2/3/4
 
-weesetupÊÇÎªÁË·½±ã°²×°wee63.mbr¶øĞ´µÄ³ÌĞò¡£Ö§³Ö×Ô¶¨Òå½Å±¾¡£
+weesetupæ˜¯ä¸ºäº†æ–¹ä¾¿å®‰è£…wee63.mbrè€Œå†™çš„ç¨‹åºã€‚æ”¯æŒè‡ªå®šä¹‰è„šæœ¬ã€‚
 
-×¢Òâ£º Èç¹ûÄãµÄbiod²»Ö§³ÖEBIOSÇë²»Òª°²×°£¨Ò»°ãÇé¿öÏÂ½ÏĞÂµÄµçÄÔ¶¼»áÖ§³Ö£©£¬¾ßÌåÔ­ÒòÇë¿´ÏÂÃæµÄWEEËµÃ÷¡£
+æ³¨æ„ï¼š å¦‚æœä½ çš„biodä¸æ”¯æŒEBIOSè¯·ä¸è¦å®‰è£…ï¼ˆä¸€èˆ¬æƒ…å†µä¸‹è¾ƒæ–°çš„ç”µè„‘éƒ½ä¼šæ”¯æŒï¼‰ï¼Œå…·ä½“åŸå› è¯·çœ‹ä¸‹é¢çš„WEEè¯´æ˜ã€‚
 
    WEE access disk sectors only using EBIOS(int13/AH=42h), and never using
    CHS mode BIOS call(int13/AH=02h). So, if the BIOS does not support EBIOS
@@ -21,13 +21,17 @@ weesetupÊÇÎªÁË·½±ã°²×°wee63.mbr¶øĞ´µÄ³ÌĞò¡£Ö§³Ö×Ô¶¨Òå½Å±¾¡£
    as well.
 
    Besides, WEE can run 32-bit programs written for it.
+2011-03-07
+	1.å‡çº§å†…ç½®wee63.mbråˆ°æœ€æ–°ç‰ˆã€‚
+	2.ä¿®æ”¹é»˜è®¤çš„å†…ç½®è„šæœ¬èœå•ã€‚
+
 2011-02-28
-	1.Éı¼¶ÄÚÖÃwee63.mbrµ½×îĞÂ°æ.
+	1.å‡çº§å†…ç½®wee63.mbråˆ°æœ€æ–°ç‰ˆ.
 
 2011-02-17
-	1.Éı¼¶ÄÚÖÃwee63.mbrµ½×îĞÂ°æ
-	2.Ìí¼Ó-l²ÎÊı£¬ÏÔÊ¾´ÅÅÌÁĞ±í¡£
-	3.×èÖ¹ÔÚÊ¹ÓÃÁËfbinstµÄ´ÅÅÌÉÏÊ¹ÓÃ¸Ã³ÌĞò¡£
+	1.å‡çº§å†…ç½®wee63.mbråˆ°æœ€æ–°ç‰ˆ
+	2.æ·»åŠ -lå‚æ•°ï¼Œæ˜¾ç¤ºç£ç›˜åˆ—è¡¨ã€‚
+	3.é˜»æ­¢åœ¨ä½¿ç”¨äº†fbinstçš„ç£ç›˜ä¸Šä½¿ç”¨è¯¥ç¨‹åºã€‚
 	
 
 weesetup v1.2.
@@ -57,68 +61,83 @@ Thanks:
         wee63setup.c by SvOlli,xdio.c by bean
 
 
-wee °²×°³ÌĞòv1.2
-ÓÃ·¨:
-        weesetup [²ÎÊı] ´ÅÅÌ
-²ÎÊı:
-        -i wee63.mbr            Ê¹ÓÃÍâÖÃµÄwee63.mbr¡£
+wee å®‰è£…ç¨‹åºv1.2
+ç”¨æ³•:
+        weesetup [å‚æ•°] ç£ç›˜
+å‚æ•°:
+        -i wee63.mbr            ä½¿ç”¨å¤–ç½®çš„wee63.mbrã€‚
 
-        -o outfile              µ¼³öĞÂµÄWEE63.MBRÎÄ¼şµ½outfile.
+        -o outfile              å¯¼å‡ºæ–°çš„WEE63.MBRæ–‡ä»¶åˆ°outfile.
 
-        -s scriptfile           µ¼Èëwee½Å±¾ÎÄ¼ş.
+        -s scriptfile           å¯¼å…¥weeè„šæœ¬æ–‡ä»¶.
 
-        -m mbrfile              ´Ómbrfile»ñÈ¡mbrĞÅÏ¢£¨±ØĞëÅäºÏ²ÎÊı-oÊ¹ÓÃ£©.
+        -m mbrfile              ä»mbrfileè·å–mbrä¿¡æ¯ï¼ˆå¿…é¡»é…åˆå‚æ•°-oä½¿ç”¨ï¼‰.
 
-        -f                      Ç¿ÖÆ°²×°.
-	-u			¸üĞÂwee.
-        -b                      ±¸·İ¾ÉµÄmbrµ½µÚ¶şÉÈÇø£¨Ä¬ÈÏ²»±¸·İ£¬¶øÊÇÖ±½ÓÊ¹ÓÃÄÚÖÃµÄnt6mbr£©.
-	-l			ÏÔÊ¾ËùÔÚÓ²ÅÌÁĞ±í
+        -f                      å¼ºåˆ¶å®‰è£….
+	-u			æ›´æ–°wee.
+        -b                      å¤‡ä»½æ—§çš„mbråˆ°ç¬¬äºŒæ‰‡åŒºï¼ˆé»˜è®¤ä¸å¤‡ä»½ï¼Œè€Œæ˜¯ç›´æ¥ä½¿ç”¨å†…ç½®çš„nt6mbrï¼‰.
+	-l			æ˜¾ç¤ºæ‰€åœ¨ç¡¬ç›˜åˆ—è¡¨
 
-Çëµ½ÒÔÏÂÍøÖ·±¨¸æBUG:
+è¯·åˆ°ä»¥ä¸‹ç½‘å€æŠ¥å‘ŠBUG:
         http://code.google.com/p/grubutils/issues
 
-¸ĞĞ»:
+æ„Ÿè°¢:
         wee63.mbr (minigrub for mbr by tinybit)
                 http://bbs.znpc.net/viewthread.php?tid=5838
         wee63setup.c by SvOlli,xdio.c by bean
 
-¸ü¶à×ÊÁÏÇë·ÃÎÊÎÒµÄ²«¿Í:
+æ›´å¤šèµ„æ–™è¯·è®¿é—®æˆ‘çš„æå®¢:
 	http://chenall.net/post/weesetup/
 
-±àÒë·½·¨£º
+ç¼–è¯‘æ–¹æ³•ï¼š
 
-1.Ê×ÏÈ´ÓSVNÏÂÔØGRUBUTILSÔ´Âë
+1.é¦–å…ˆä»SVNä¸‹è½½GRUBUTILSæºç 
 svn co svn://svn.gna.org/svn/grubutil grubutil
 
-2.ÔÚgrubutilÄ¿Â¼ÏÂĞÂ½¨Ò»¸ö×ÓÄ¿Â¼weesetup£¬È»ºó°ÑweesetupµÄÔ´Âë¸´ÖÆ¹ıÈ¥.
+2.åœ¨grubutilç›®å½•ä¸‹æ–°å»ºä¸€ä¸ªå­ç›®å½•weesetupï¼Œç„¶åæŠŠweesetupçš„æºç å¤åˆ¶è¿‡å».
 
-ÔÚweesetupÄ¿Â¼ÏÂÖ´ĞĞmake£¬¾Í¿ÉÒÔÔÚbinÄ¿Â¼ÖĞÉú³ÉÒ»¸öweesetup.exe
+åœ¨weesetupç›®å½•ä¸‹æ‰§è¡Œmakeï¼Œå°±å¯ä»¥åœ¨binç›®å½•ä¸­ç”Ÿæˆä¸€ä¸ªweesetup.exe
+
+æˆ–ç›´æ¥ä»googlecodeä¸Šä¸‹è½½ã€‚
+svn co http://grubutils.googlecode.com/svn/grubutils grubutils
+
+cd grubutils
+cd weesetup
+make
 
 
-¸½:ÄÚÖÃµÄwee63.mbrÄ¬ÈÏ½Å±¾ÄÚÈİ
+é™„:å†…ç½®çš„wee63.mbré»˜è®¤è„šæœ¬å†…å®¹
 find --set-root /boot/grub/grldr
 /boot/grub/grldr
-find --set-root /boot/grldr
-/boot/grldr
 timeout 1
 default 0
-title 1.GRUB4DOS
-find --set-root /BOOT/GRUB/GRLDR
-/BOOT/GRUB/GRLDR
-find --set-root /BOOT/GRLDR
-/BOOT/GRLDR
-find --set-root /BOOT/GRUB.EXE
-/BOOT/GRUB.EXE
-find --set-root /grldr
-/grldr
 
-title 2.Windows
-chainloader (hd0)1+1
+title 1. Windows
+find --set-root --active
++1
 find --set-root /bootmgr
 /bootmgr
 find --set-root /ntldr
 /ntldr
 
-title 3.Plop Boot Manager 
+title 2. GRUB4DOS
+find --set-root /BOOT/GRUB/GRLDR
+/BOOT/GRUB/GRLDR
+find --set-root /BOOT/GRUB.EXE
+/BOOT/GRUB.EXE
+find --set-root /BOOT/GRLDR
+/BOOT/GRLDR
+find --set-root /grldr
+/grldr
+
+title 3. Plop Boot Manager 
 find --set-root /BOOT/GRUB/PLPBT.BIN
 /BOOT/GRUB/PLPBT.BIN
+
+title 4. Vboot
+find --set-root /vbootldr
+/vbootldr
+
+title 5. Burg
+find --set-root /buldr
+/buldr

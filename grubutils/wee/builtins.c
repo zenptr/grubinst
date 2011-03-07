@@ -1468,6 +1468,7 @@ find_func (char *arg/*, int flags*/)
 //  unsigned long ignore_cd = 0;
   unsigned long ignore_floppies = 0;
   unsigned long ignore_oem = 0;
+  unsigned long active = 0;
   //char *in_drives = NULL;	/* search in drive list */
   char root_found[16];
   
@@ -1491,9 +1492,13 @@ find_func (char *arg/*, int flags*/)
       {
 	ignore_floppies = 1;
       }
-	else if (grub_memcmp (arg, "--ignore-oem", 12) == 0)
+    else if (grub_memcmp (arg, "--ignore-oem", 12) == 0)
       {
 	ignore_oem = 1;
+      }
+    else if (grub_memcmp (arg, "--active", 8) == 0)
+      {
+	active = 1;
       }
     else
 	break;
@@ -1576,6 +1581,13 @@ find_func (char *arg/*, int flags*/)
 		next_partition_buf		= mbr,
 		next_partition ())) */
 	{
+	  if (active)
+	  {
+		if (pi[i].part_num > 3)	/* not primary */
+			break;
+		if (pi[i].boot_indicator != 0x80) /* not active */
+			continue;
+	  }
 	  type = pi[i].part_type;
 	  if (type != PC_SLICE_TYPE_NONE
 		  && ! (ignore_oem == 1 && (type & ~PC_SLICE_TYPE_HIDDEN_FLAG) == 0x02) 

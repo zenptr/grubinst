@@ -4,7 +4,8 @@ timeout 1
 default 0
 
 title 1. Windows
-(hd0)1+1
+find --set-root --active
++1
 find --set-root /bootmgr
 /bootmgr
 find --set-root /ntldr
