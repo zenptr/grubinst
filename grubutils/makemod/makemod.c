@@ -12,7 +12,8 @@ int main(int argc,char *argv[])
   {
     char filename[12];
     unsigned long size;
-  } grub_mod;
+  } grub_mod = {"\x05\x18\x05\x03\xBA\xA7\xBA\xBC",0};
+  fwrite(&grub_mod,1,16,f_mod);
   char *buff=malloc(0xa000);
   unsigned long n;
   for(i = 1; i < argc; i++)
