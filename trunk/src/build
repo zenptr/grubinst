@@ -1,7 +1,5 @@
 #! /bin/sh
 #
-DATE=`date -u +%Y-%m-%d`
-#echo "#define CUR_DATE \"${DATE}\"\r\n">date.h
 if [ ! -d ./tmp ] ; then
 	mkdir ./tmp
 fi
@@ -19,7 +17,7 @@ for file in *.c;do
 		fi
 	fi
 	echo "build $file --> $OUT --> ./bin/${file%*.c}"
-	gcc -nostdlib -I./include/ -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE $file -o $OUT || continue
+	gcc -nostdlib -DASM_BUILD_DATE="\"`date -u +".long "%Y%m%d`"\" -I./include/ -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE $file -o $OUT || continue
 	objcopy -O binary $OUT ./bin/${file%*.c} || continue
 	rm -f ./zip/${file%*.c}.zip
 	zip -9 -j -q "./zip/${file%*.c}-${DATE}.zip" ./bin/${file%*.c} ${file%*.c}-*.txt

@@ -259,6 +259,7 @@ static struct cmd_list
   int flags;			//标志
 } *p_cmd_list = NULL;
 asm(".long 0x534F4434");
+asm(ASM_BUILD_DATE);
 /* a valid executable file for grub4dos must end with these 8 bytes */
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");

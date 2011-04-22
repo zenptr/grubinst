@@ -195,7 +195,8 @@ static struct	system_description_table_header *	xsdt_addr = NULL;
 static struct	system_description_table_header *	dsdt_addr = NULL; 
 static struct	simplify_fadt_table *				fadt_addr = NULL; 
 
-		  
+		 
+asm(ASM_BUILD_DATE); 
 /*///////////////////////////////////////////////////////////////////////////////////////////
 	a valid executable file/mode for grub4dos must end with these 8 bytes,
 	gcc treat the following lines as data and only it follow  global initialization .

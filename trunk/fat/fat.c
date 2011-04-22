@@ -68,6 +68,7 @@ unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the follow
 //asm(".long 0x534F4434");
 
 /* a valid executable file for grub4dos must end with these 8 bytes */
+asm(ASM_BUILD_DATE);
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");
 
@@ -104,8 +105,6 @@ main (char *arg,int flags)
 	{
 		return !printf("Err grub4dos version\n");
 	}
-	if ((f_buf = malloc(f_buf_sz)) == NULL)
-		return 0;
 	int ret=fat_func (arg , flags);
 	free(f_buf);
 	return ret;
@@ -369,7 +368,11 @@ static FRESULT fat_copy (char *arg)
 		return FR_DENIED;
 	}
 	#endif
-
+	if ((f_buf = malloc(filemax>f_buf_sz?f_buf_sz:filemax)) == NULL)
+	{
+		close();
+		return 0;
+	}
 	br = f_pos = read((unsigned long long)(int)f_buf,f_buf_sz, GRUB_READ);
 	close();
 

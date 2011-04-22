@@ -41,7 +41,7 @@ int GRUB = 0x42555247;/* this is needed, see the following comment. */
  */
 
 asm(".long 0x534F4434");
-
+asm(ASM_BUILD_DATE);
 /* a valid executable file for grub4dos must end with these 8 bytes */
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");
@@ -56,5 +56,5 @@ main ()
 	void *p = &main;
 	char *arg = p - (*(int *)(p - 8));
 	int flags = (*(int *)(p - 12));
-	return printf ("%s\n",arg);
+	return printf (":%s\n",arg);
 }

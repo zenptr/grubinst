@@ -23,6 +23,7 @@ int GRUB = 0x42555247;/* this is needed, see the following comment. */
  * above line occurs.
  */
 asm(".long 0x534F4434");
+asm(ASM_BUILD_DATE);
 /* a valid executable file for grub4dos must end with these 8 bytes */
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");

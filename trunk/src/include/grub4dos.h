@@ -230,7 +230,7 @@ typedef enum
 int
 devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
 */
-#define dir ((int (*)(char *))((*(int **)0x8300)[61]))
+#define grub_dir ((int (*)(char *))((*(int **)0x8300)[61]))
 #define print_a_completion ((void (*)(char *))((*(int **)0x8300)[62]))
 #define print_completions ((int (*)(int, int))((*(int **)0x8300)[63]))
 #define lba_to_chs ((void (*)(unsigned long lba, unsigned long *cl, unsigned long *ch, unsigned long *dh))((*(int **)0x8300)[64]))
