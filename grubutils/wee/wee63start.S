@@ -58,6 +58,104 @@ _start1:
 	 *
 	 */
 
+#if defined(FOR_ROM)
+	.byte	0x55, 0xAA
+	.byte	0x7F	/* ROM size in sectors. should fit the real size. */
+	jmp	1f	/* ROM init routine start */
+	.byte	0	/* byte is used to adjust ROM checksum */
+1:
+	cli		/* in order to use as less stack as possible */
+
+	/* backup 640KB conventional memory to 4M for quit later. */
+
+	/* save CPU registers on stack */
+
+	pushw	%ds
+	pushw	%es
+	pushal
+
+	/* fill gdt base first thing! */
+	xorl	%eax, %eax
+	movw	%ds, %ax
+	shll	$4, %eax
+	addl	$ABS_PSP(dos_gdt), %eax
+	movl	%eax, ABS_PSP(dos_gdt) + 2
+
+	/* DS=ES */
+
+	/* Save all registers on stack, which quit_address will use to
+	 * restore registers after pre_stage2 calls quit.
+	 */
+
+	pushw	%ds
+	pushw	%es
+	pushal
+	//movw	%es, %bx	# save old ES to BX
+	movl	ABS_PSP(a20_status), %edx
+
+	cli
+	lgdt	ABS_PSP(dos_gdt)
+
+	/* Note for people who are tracing/debugging this program:
+	 *
+	 * This will switch to protected mode! Don't single step it!
+	 *
+	 * Set break point at restore_BIOS_environment, and go!
+	 */
+
+	movl	%cr0, %eax
+	orb	$1, %al
+	movl	%eax, %cr0
+
+	/* Here the CPU is in protected mode. The real mode interrupt
+	 * vector table won't work now.
+	 *
+	 * Note that the CS segment is still 16-bit because we have not
+	 * reloaded CS with a 32-bit segment selector.
+	 */
+
+
+	pushw	%cs
+	.....................
+
+# Descriptor tables
+#
+# NOTE: The intel manual says gdt should be sixteen bytes aligned for
+# efficiency reasons.  However, there are machines which are known not
+# to boot with misaligned GDTs, so alter this at your peril!  If you alter
+# GDT_ENTRY_BOOT_CS (in asm/segment.h) remember to leave at least two
+# empty GDT entries (one for NULL and one reserved).
+#
+# NOTE:	On some CPUs, the GDT must be 8 byte aligned.  This is
+# true for the Voyager Quad CPU card which will not boot without
+# This directive.  16 byte aligment is recommended by intel.
+#
+	.align 16
+gdt:
+	/* this is the default null entry in GDT */
+	.word	gdt_end - gdt - 1		# gdt limit
+	.long	(GRLDR_CS * 16 + gdt - _start1)	# linear address of gdt
+	.word	0				# pad 2 bytes
+
+	/* real mode data segment base=0x400000=4M */
+	.word	0xFFFF	# 64K limit
+	.word	0x0000	# base address bit 0-15
+	.byte	0x40	# base address bit 16-23
+	.byte	0x93	# Present, DPL=0, Data segment, Writable, Accessed
+	.byte	0x00	# G=D=rsv=AVL=0, lo 4 bits=hi 4 bits of limit=0
+	.byte	0x00	# base address bit 24-31
+
+	/* real mode data segment base=0 */
+	.word	0xFFFF	# 64K limit
+	.word	0x0000	# base address bit 0-15
+	.byte	0x00	# base address bit 16-23
+	.byte	0x93	# Present, DPL=0, Data segment, Writable, Accessed
+	.byte	0x00	# G=D=rsv=AVL=0, lo 4 bits=hi 4 bits of limit=0
+	.byte	0x00	# base address bit 24-31
+
+gdt_end:
+
+#else
 	/* No cli, we use stack! BIOS or caller usually sets SS:SP=0000:0400 */
 
 	/* Acer will hang up on USB boot if the leading byte is 0xEB(jmp).
@@ -75,7 +173,7 @@ _start1:
 	//jmp	1f	/* it occupies the first 2 bytes of the OEM string. */
 
 			/* BPB of FAT can be placed here. */
-
+#endif
 	. = _start1 + 0x5A
 
 	.byte	0x80	/* bit0=1: disable GRLDR search on floppy */
@@ -214,7 +312,7 @@ _start1:
 	cld
 	repz stosw
 
-	/* read 63 sectors of drive 0x80 or drive 0x00 to 07E0:0000 */
+	/* read 127 sectors of drive 0x80 or drive 0x00 to 07E0:0000 */
 
 	movb	$0x80, %dl	/* hard drive */
 1:
@@ -224,7 +322,7 @@ _start1:
 	pushl	%eax
 	pushw	%es
 	pushw	%ax
-	pushw	$63
+	pushw	$127	//$63
 	pushw	$0x10
 	movw	%sp, %si
 	movw	$0x4200, %ax
@@ -232,11 +330,11 @@ _start1:
 	popaw
 	popaw
 
-	/* compare the sector to the MBR */
+	/* compare the sector to the MBR, ignoring BPB */
 
-	xorw	%si, %si
-	xorw	%di, %di
-	movw	$0x100, %cx
+	movw	$0x5A, %si
+	movw	%si, %di
+	movw	$((0x200 - 0x5A) / 2), %cx
 	cs repz cmpsw
 	je	1f
 	testb	%dl, %dl

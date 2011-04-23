@@ -80,6 +80,10 @@
 # define EXT_C(sym) sym
 #endif
 
+#define NO_DECOMPRESSION
+#define BIOSDISK_FLAG_LBA_EXTENSION	0x1
+#include "extra.h"
+
 /* 512-byte scratch area */
 #define SCRATCHADDR  0x3fe00
 #define SCRATCHSEG   0x3fe0
@@ -366,9 +370,9 @@ struct mem_alloc_array
   unsigned long pid;
 };
 
-struct mem_alloc_array *mem_alloc_array_start;
+extern struct mem_alloc_array *mem_alloc_array_start;
 #define mem_alloc_array_start (*(struct mem_alloc_array **)((char *)(&mem_alloc_array_start) - 0x300000))
-unsigned long mem_alloc_array_end;
+extern unsigned long mem_alloc_array_end;
 #define mem_alloc_array_end (*(unsigned long *)((char *)(&mem_alloc_array_end) - 0x300000))
 
 /* instrumentation variables */
@@ -383,7 +387,7 @@ extern unsigned long current_partition;
 extern int fsys_type;
 
 extern inline unsigned long log2_tmp (unsigned long word);
-extern void unicode_to_utf8 (unsigned short *filename, unsigned char *utf8, unsigned long n);
+extern unsigned long unicode_to_utf8 (unsigned short *filename, unsigned char *utf8, unsigned long n);
 
 extern unsigned long long part_start;
 #define part_start (*(unsigned long long *)((char *)(&part_start) - 0x300000))
@@ -425,6 +429,17 @@ extern unsigned long saved_mem_lower;
 extern unsigned long saved_mmap_addr;
 extern unsigned long saved_mmap_length;
 
+extern int filesystem_type;
+
+extern unsigned long ROM_int15;
+#define ROM_int15 (*(unsigned long *)((char *)(&ROM_int15) - 0x300000))
+
+extern unsigned long ROM_int13;
+#define ROM_int13 (*(unsigned long *)((char *)(&ROM_int13) - 0x300000))
+
+extern unsigned long ROM_int13_dup;
+#define ROM_int13_dup (*(unsigned long *)((char *)(&ROM_int13_dup) - 0x300000))
+
 /*
  *  Error variables.
  */
@@ -432,6 +447,23 @@ extern unsigned long saved_mmap_length;
 extern unsigned long errnum;
 #define errnum (*(unsigned long *)((char *)(&errnum) - 0x300000))
 extern char *err_list[];
+
+extern unsigned long memdisk_raw;
+#define memdisk_raw (*(unsigned long *)((char *)(&memdisk_raw) - 0x300000))
+
+extern unsigned long a20_keep_on;
+#define a20_keep_on (*(unsigned long *)((char *)(&a20_keep_on) - 0x300000))
+
+extern unsigned long safe_mbr_hook;
+#define safe_mbr_hook (*(unsigned long *)((char *)(&safe_mbr_hook) - 0x300000))
+
+extern unsigned long int13_scheme;
+#define int13_scheme (*(unsigned long *)((char *)(&int13_scheme) - 0x300000))
+
+extern int is64bit;
+#define is64bit (*(int *)((char *)(&is64bit) - 0x300000))
+extern int debug;
+#define debug (*(int *)((char *)(&debug) - 0x300000))
 
 /* Simplify declaration of entry_addr. */
 typedef void (*entry_func) (int, int, int, int, int, int)
@@ -527,8 +559,118 @@ unsigned long grub_read (unsigned long long buf, unsigned long long len, unsigne
 void print_fsys_type (void);
 
 /* Display device and filename completions. */
-void print_a_completion (char *filename);
+void print_a_completion (char *filename, int case_insensitive);
 int print_completions (void);
+
+struct master_and_dos_boot_sector {
+/* 00 */ char dummy1[0x0b]; /* at offset 0, normally there is a short JMP instuction(opcode is 0xEB) */
+/* 0B */ unsigned short bytes_per_sector __attribute__ ((packed));/* seems always to be 512, so we just use 512 */
+/* 0D */ unsigned char sectors_per_cluster;/* non-zero, the power of 2, i.e., 2^n */
+/* 0E */ unsigned short reserved_sectors __attribute__ ((packed));/* FAT=non-zero, NTFS=0? */
+/* 10 */ unsigned char number_of_fats;/* NTFS=0; FAT=1 or 2  */
+/* 11 */ unsigned short root_dir_entries __attribute__ ((packed));/* FAT32=0, NTFS=0, FAT12/16=non-zero */
+/* 13 */ unsigned short total_sectors_short __attribute__ ((packed));/* FAT32=0, NTFS=0, FAT12/16=any */
+/* 15 */ unsigned char media_descriptor;/* range from 0xf0 to 0xff */
+/* 16 */ unsigned short sectors_per_fat __attribute__ ((packed));/* FAT32=0, NTFS=0, FAT12/16=non-zero */
+/* 18 */ unsigned short sectors_per_track __attribute__ ((packed));/* range from 1 to 63 */
+/* 1A */ unsigned short total_heads __attribute__ ((packed));/* range from 1 to 256 */
+/* 1C */ unsigned long hidden_sectors __attribute__ ((packed));/* any value */
+/* 20 */ unsigned long total_sectors_long __attribute__ ((packed));/* FAT32=non-zero, NTFS=0, FAT12/16=any */
+/* 24 */ unsigned long sectors_per_fat32 __attribute__ ((packed));/* FAT32=non-zero, NTFS=any, FAT12/16=any */
+/* 28 */ unsigned long long total_sectors_long_long __attribute__ ((packed));/* NTFS=non-zero, FAT12/16/32=any */
+/* 30 */ char dummy2[0x18e];
+
+    /* Partition Table, starting at offset 0x1BE */
+/* 1BE */ struct {
+	/* +00 */ unsigned char boot_indicator;
+	/* +01 */ unsigned char start_head;
+	/* +02 */ unsigned short start_sector_cylinder __attribute__ ((packed));
+	/* +04 */ unsigned char system_indicator;
+	/* +05 */ unsigned char end_head;
+	/* +06 */ unsigned short end_sector_cylinder __attribute__ ((packed));
+	/* +08 */ unsigned long start_lba __attribute__ ((packed));
+	/* +0C */ unsigned long total_sectors __attribute__ ((packed));
+	/* +10 */
+    } P[4];
+/* 1FE */ unsigned short boot_signature __attribute__ ((packed));/* 0xAA55 */
+};
+
+int probe_bpb (struct master_and_dos_boot_sector *BS);
+int probe_mbr (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1);
+
+struct realmode_regs {
+	unsigned long edi; // input and output
+	unsigned long esi; // input and output
+	unsigned long ebp; // input and output
+	unsigned long esp; //stack pointer, input
+	unsigned long ebx; // input and output
+	unsigned long edx; // input and output
+	unsigned long ecx; // input and output
+	unsigned long eax;// input and output
+	unsigned long gs; // input and output
+	unsigned long fs; // input and output
+	unsigned long es; // input and output
+	unsigned long ds; // input and output
+	unsigned long ss; //stack segment, input
+	unsigned long eip; //instruction pointer, input
+	unsigned long cs; //code segment, input
+	unsigned long eflags; // input and output
+};
+
+struct drive_map_slot
+{
+	/* Remember to update DRIVE_MAP_SLOT_SIZE once this is modified.
+	 * The struct size must be a multiple of 4.
+	 */
+
+	  /* X=max_sector bit 7: read only or fake write */
+	  /* Y=to_sector  bit 6: safe boot or fake write */
+	  /* ------------------------------------------- */
+	  /* X Y: meaning of restrictions imposed on map */
+	  /* ------------------------------------------- */
+	  /* 1 1: read only=0, fake write=1, safe boot=0 */
+	  /* 1 0: read only=1, fake write=0, safe boot=0 */
+	  /* 0 1: read only=0, fake write=0, safe boot=1 */
+	  /* 0 0: read only=0, fake write=0, safe boot=0 */
+
+	unsigned char from_drive;
+	unsigned char to_drive;		/* 0xFF indicates a memdrive */
+	unsigned char max_head;
+	unsigned char max_sector;	/* bit 7: read only */
+					/* bit 6: disable lba */
+
+	unsigned short to_cylinder;	/* max cylinder of the TO drive */
+					/* bit 15:  TO  drive support LBA */
+					/* bit 14:  TO  drive is CDROM(with big 2048-byte sector) */
+					/* bit 13: FROM drive is CDROM(with big 2048-byte sector) */
+
+	unsigned char to_head;		/* max head of the TO drive */
+	unsigned char to_sector;	/* max sector of the TO drive */
+					/* bit 7: in-situ */
+					/* bit 6: fake-write or safe-boot */
+
+	unsigned long long start_sector;
+	//unsigned long start_sector_hi;	/* hi dword of the 64-bit value */
+	unsigned long long sector_count;
+	//unsigned long sector_count_hi;	/* hi dword of the 64-bit value */
+};
+
+//extern struct drive_map_slot bios_drive_map[DRIVE_MAP_SIZE + 1];
+//extern struct drive_map_slot hooked_drive_map[DRIVE_MAP_SIZE + 1];
+extern struct drive_map_slot bios_drive_map[];
+extern struct drive_map_slot hooked_drive_map[];
+
+//#define bios_drive_map ((struct drive_map_slot *)((char *)(&bios_drive_map) - 0x300000))
+#define hooked_drive_map ((struct drive_map_slot *)((char *)(&hooked_drive_map) - 0x300000))
+
+void linux_boot (void) __attribute__ ((noreturn));
+#define linux_boot ((void (*)(void))((char *)(&linux_boot) - 0x300000))
+
+extern char floppies_orig;
+extern char harddrives_orig;
+
+#define floppies_orig (*(char *)((char *)(&floppies_orig) - 0x300000))
+#define harddrives_orig (*(char *)((char *)(&harddrives_orig) - 0x300000))
 
 #endif /* ! ASM_FILE */
 

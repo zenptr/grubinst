@@ -1,23 +1,38 @@
-echo weeeeeeeeeeeeeee:)
+find --set-root /boot/grub/grldr
+/boot/grub/grldr
+timeout 1
 default 0
-timeout 30
-title ************************* Wee Startup Menu :) **************************
-title ========================================================================
-title Test title 1. Note: you may press C or Q or ESC to enter command line
-echo 1111111111111
-pause --wait=10 Press any key to continue...
-title ------------------------------------------------------------------------
-title Test title 2. Command 'exit' can be used to enter command line
-echo 2222222222222
-pause --wait=10 Press any key to enter command line...
-exit
-title ------------------------------------------------------------------------
-title Note: At wee prompt, you may use the 'title' command to go back to menu.
-echo 3333333333333
-pause --wait=10 Press any key to continue...
-title ------------------------------------------------------------------------
-title Note: Using 'exit' before all titles can effectively disable the menu.
-echo 4444444444444
-pause --wait=10 Press any key to continue...
-title ------------------------------------------------------------------------
+
+title 1. Windows
+find --set-root --active
++1
+find --set-root /bootmgr
+/bootmgr
+find --set-root /ntldr
+/ntldr
+
+title 2. Grub4dos
+find --set-root /boot/grub/grldr
+/boot/grub/grldr
+find --set-root /boot/grub.exe
+/boot/grub.exe
+find --set-root /boot/grldr
+/boot/grldr
+find --set-root /grub.exe
+/grub.exe
+find --set-root /grldr
+/grldr
+
+title 3. Plop Boot Manager
+find --set-root /boot/grub/plpbt.bin
+/boot/grub/plpbt.bin
+
+title 4. Vboot
+find --set-root /vbootldr
+/vbootldr
+
+title 5. Burg
+find --set-root /buldr
+/buldr
+
 

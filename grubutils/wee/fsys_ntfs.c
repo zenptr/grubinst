@@ -1055,31 +1055,36 @@ error:
   return 0;
 }
 
+static char ch;
+
 static int list_file(char* cur_mft,char *fn,char *pos)
 {
   char *np;
   unsigned char *utf8 = (unsigned char *)(NAME_BUF);
-  int i,ns,len;
+  unsigned long i,ns,len;
 
-  len=strlen(fn);
-  while (1)
+  //len=strlen(fn);
+  for (len=strlen(fn); ! (pos[0xC] & 2); pos+=valueat(pos,8,unsigned short))
     {
-      if (pos[0xC] & 2)			// end signature
-        break;
+      int is_print=(print_possibilities && ch != '/');
+      //if (pos[0xC] & 2)			// end signature
+      //  break;
       np=pos+0x52;
       ns=valueat(np,-2,unsigned char);
-      unicode_to_utf8((unsigned short *)np, utf8, ns);
-      if (((print_possibilities) && (ns>=len)) ||
-          ((! print_possibilities) && (ns==len)))
+      if (ns <= 12 && pos[0x51] == 2)		// exclude short names
+	continue;
+      ns=unicode_to_utf8((unsigned short *)np, utf8, ns);
+      if (((is_print) && (ns>=len)) ||
+          ((! is_print) && (ns==len)))
         {
           for (i=0;i<len;i++)
-            if (tolower(fn[i])!=tolower(utf8[i]/*np[i*2]*/))
+            if (tolower(((unsigned char*)fn)[i])!=tolower(utf8[i]/*np[i*2]*/))
               break;
           if (i>=len)
             {
-              if (print_possibilities)
+              if (is_print)
                 {
-                  if ((i) || ((utf8[0]!='$') && ((utf8[0]!='.') || (ns!=1))))
+		//if ((i) || ((utf8[0]!='$') && ((utf8[0]!='.') || (ns!=1))))
                     {
 #ifndef STAGE1_5
                       if (print_possibilities>0)
@@ -1091,7 +1096,7 @@ static int list_file(char* cur_mft,char *fn,char *pos)
 #ifdef FS_UTIL
                       print_completion_ex(utf8,valueat(pos,0,unsigned long),valueat(pos,0x40,unsigned long),(valueat(pos,0x48,unsigned long) & ATTR_DIRECTORY)?FS_ATTR_DIRECTORY:0);
 #else
-                      print_a_completion((char *)utf8);
+                      print_a_completion((char *)utf8, 1);
 #endif
                     }
                 }
@@ -1106,7 +1111,7 @@ static int list_file(char* cur_mft,char *fn,char *pos)
                 }
             }
         }
-      pos+=valueat(pos,8,unsigned short);
+      //pos+=valueat(pos,8,unsigned short);
     }
   return -1;
 }
@@ -1320,9 +1325,9 @@ int ntfs_mount (void)
 int ntfs_dir (char *dirname)
 {
   int ret;
-#ifndef STAGE1_5
-  int is_print=print_possibilities;
-#endif
+//#ifndef STAGE1_5
+//  int is_print=print_possibilities;
+//#endif
 
   filepos=filemax=0;
 
@@ -1347,7 +1352,7 @@ int ntfs_dir (char *dirname)
 
   while (1)
     {
-      char *next, ch;
+      char *next/*, ch*/;
 
       /* skip to next slash or end of filename (space) */
       for (next = dirname; (ch = *next) && ch != '/' && ch != ' ' && ch != '\t'; next++)
@@ -1361,26 +1366,26 @@ int ntfs_dir (char *dirname)
       }
 
       *next = 0;
-#ifndef STAGE1_5
-      print_possibilities=(ch=='/')?0:is_print;
-#endif
+//#ifndef STAGE1_5
+//      print_possibilities=(ch=='/')?0:is_print;
+//#endif
 
       ret=scan_dir(cmft,dirname);
 
+//#ifndef STAGE1_5
+//  print_possibilities=is_print;
+//#endif
       *next=ch;
 
       if (! ret)
         break;
 
-      if (ch=='/')
-        dirname=next+1;
-      else
+      if (ch!='/')
         break;
+
+      dirname=next+1;
     }
 
-#ifndef STAGE1_5
-  print_possibilities=is_print;
-#endif
   return ret;
 }
 

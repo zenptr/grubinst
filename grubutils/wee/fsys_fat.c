@@ -531,7 +531,7 @@ valid_filename:
 	    {
 	      if (print_possibilities > 0)
 		print_possibilities = -print_possibilities;
-	      print_a_completion ((char *)utf8);
+	      print_a_completion ((char *)utf8, 1);
 	    }
 	  continue;
 	}

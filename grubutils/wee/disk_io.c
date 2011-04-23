@@ -93,11 +93,11 @@ unsigned long long buf_track = -1;/* low 32 bit to invalidate the buffer */
 
 //int rawread_ignore_memmove_overflow = 0;/* blocklist_func() set this to 1 */
 
-/* Convert unicode filename to UTF-8 filename. N is the max characters to be
- * converted. The caller should asure there is enough room in the UTF8 buffer.
- *
+/* Convert unicode filename to UTF-8 filename. N is the max UTF-16 characters
+ * to be converted. The caller should asure there is enough room in the UTF8
+ * buffer. Return the length of the converted UTF8 string.
  */
-void
+unsigned long
 unicode_to_utf8 (unsigned short *filename, unsigned char *utf8, unsigned long n)
 {
 	unsigned short uni;
@@ -129,6 +129,7 @@ unicode_to_utf8 (unsigned short *filename, unsigned char *utf8, unsigned long n)
 		}
 	}
 	utf8[k] = 0;
+	return k;
 }
 
 #if 0 //def STAGE1_5
@@ -154,6 +155,9 @@ rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offs
       unsigned long long track;
       char *bufaddr;
       int bufseg;
+
+      if (! buf)
+	goto list_blocks;
 
       /* Reset geometry and invalidate track buffer if the disk is wrong. */
       if (buf_drive != drive)
@@ -228,6 +232,8 @@ rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offs
 		return !(errnum = ERR_WRITE);
 	  goto next;
       }
+
+list_blocks:
       /* Use this interface to tell which sectors were read and used. */
       if (disk_read_func)
       {
@@ -752,7 +758,7 @@ dir (char *dirname)
 /* If DO_COMPLETION is true, just print NAME. Otherwise save the unique
    part into UNIQUE_STRING.  */
 void
-print_a_completion (char *name)
+print_a_completion (char *name, int case_insensitive)
 {
   /* If NAME is "." or "..", do not count it.  */
   if (grub_strcmp (name, ".") == 0 || grub_strcmp (name, "..") == 0)
@@ -763,11 +769,11 @@ print_a_completion (char *name)
       char *buf = unique_string;
 
       if (! unique)
-	while ((*buf++ = *name++))
+	while ((*buf++ = (case_insensitive ? tolower(*name++): (*name++))))
 	  ;
       else
 	{
-	  while (*buf && (*buf == *name))
+	  while (*buf && (*buf == (case_insensitive ? tolower(*name) : *name)))
 	    {
 	      buf++;
 	      name++;
@@ -809,7 +815,7 @@ print_completions (void)
 	for (builtin = builtin_table; (*builtin); builtin++)
 	{
 	  if (substring (buf, (*builtin)->name, 0) <= 0)
-	    print_a_completion ((*builtin)->name);
+	    print_a_completion ((*builtin)->name, 0);
 	}
 
 	if (do_completion && *unique_string)
@@ -861,7 +867,7 @@ print_completions (void)
 			      char dev_name[8];
 
 			      grub_sprintf (dev_name, "%cd%d", (k ? 'h':'f'), (unsigned long)j);
-			      print_a_completion (dev_name);
+			      print_a_completion (dev_name, 0);
 			    }
 			}
 		    }

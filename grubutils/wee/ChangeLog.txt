@@ -1,4 +1,9 @@
 
+2011-04-23 implemented a simplified map command for only whole-drive mappings.
+2011-04-20 added wee127.mbr with the blocklist and map commands built in it.
+2011-03-23 excluded NTFS short filenames.
+2011-03-22 fixed a bug on case sensitivity in filename completion. added a new parameter "case_insensitive" to print_a_completion().
+2011-03-19 fixed a bug on NTFS unicode filename handling. let unicode_to_utf8() return string length after convertion.
 2011-03-06 add new find option --active to gain the active primary partition.
 2011-03-04 set the current root device as the default boot device of grub.exe.
 2011-02-25 fixed endless timeout 0 issue. let checkkey wait a timer interrupt.

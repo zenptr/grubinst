@@ -227,7 +227,7 @@ typedef unsigned long grub_error_t;
 #define open ((int (*)(char *))((*(int **)0x8300)[26]))
 #define read ((unsigned long long (*)(unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[27]))
 #define close ((void (*)(void))((*(int **)0x8300)[28]))
-#define unicode_to_utf8 ((void (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[29]))
+#define unicode_to_utf8 ((unsigned long (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[29]))
 /*
 int
 rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
