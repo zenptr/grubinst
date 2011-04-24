@@ -356,14 +356,10 @@ static char *skip_next (int flags,char *arg)
 			while (*++arg && *arg != QUOTE_CHAR)
 				;
 		}
-		/*
-		else if ((flags & 2) && *arg == '\\')
+		else if (*arg == '\\')
 		{
-			arg ++;
-			if (*arg == 0)
-				break;
+			++arg;
 		}
-		*/
 		if (*arg)
 			arg ++;
 	}
@@ -2120,7 +2116,7 @@ static int dir_func(char *arg, int flags)
 	while (*(name = p))
 	{
 		p = skip_next (SKIP_FLAGS_TERMINATE,p);
-		parse_string(name);
+//		parse_string(name);
 		if (!*arg || dir_cmp(name,arg))
 		{
 			printf("%s\r\n",name);
