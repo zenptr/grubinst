@@ -233,6 +233,7 @@ gdt_end:
 	lret
 	. = . - (. - _start1) / 0x80
 1:
+	/* CS:0000=_start1, SS:SP=0000:0580 */
 /* begin characteristics distinguish this sector from others */
 	.byte	0x8E, 0xDB		//movw	%bx, %ds
 	.byte	0x68, 0xE0, 0x07	//pushw	$0x07E0
@@ -248,6 +249,7 @@ gdt_end:
 					//it should also appear at near the end
 					//of pre_stage2
 /* end characteristics distinguish this sector from others */
+	/* DS:0000=_start1, ES=0x07E0 */
 	jne	1f
 
 	/* move image to destination 0000:8200 */
@@ -257,56 +259,78 @@ gdt_end:
 
 	ja	3f
 
-	/* move up */
+	/* move up. Max pre_stage2 sectors=125. */
 
 	movw	$0xFFFC, %si
 	movw	%si, %di
-	movw	$0x3F00, %cx
+	movw	$0x3F00, %cx	/* move 0x7E=126 sectors. */
 	std
 	repz movsl
 	cld
 	jmp	2f
 3:
-	/* move down */
+	/* move this sector down to 07C0:0000 */
 
-	/* move this sector to 07C0:0000 */
+	call	move_down_to_7C00
 
+	/* CS=0x7C0. move pre_stage2 */
+
+	movw	$0x400, %si	/* point to pre_stage2 */
+	movw	%si, %di	/* ES:DI=07E0:0400=0x8200 */
+	movw	$0x3F00, %cx	/* move 0x7E=126 sectors. */
+	repz movsl
+	jmp	2f
+
+move_down_to_7C00:
+
+	pushw	%es
 	pushw	$0x07C0
 	popw	%es		/* ES=0x07C0 */
 
 	xorw	%si, %si
 	xorw	%di, %di
-	movw	$0x80, %cx
+	movw	$0x80, %cx	/* move 1 sector */
 	cld
 	repz movsl
 
 	ljmp	$0x07C0, $(3f - _start1)
 3:
-	/* move pre_stage2 */
+	//pushw	%es		/* ES=0x07C0 */
+	//popw	%bx		/* BX=0x07C0 */
+	popw	%es
+	ret
 
-	pushw	$0x07E0
-	popw	%es		/* ES=0x07E0 */
-
-	movw	$0x400, %si
-	movw	%si, %di
-	movw	$0x3F00, %cx
-	repz movsl
-	jmp	2f
 1:
 	/* we are loaded by BIOS, only the MBR sector is loaded. */
 
-	pushw	$0x07E0
-	popw	%ss		/* SS=0x07E0 */
-	movw	$0xF000, %sp
-	sti
+	/* CS:0000=_start1, SS:SP=0000:0580 */
+	/* DS:0000=_start1, ES=0x07E0 */
+	/* CS=DS=BX */
 
-	pushw	%ss		/* SS=0x07E0 */
-	popw	%es		/* ES=0x07E0 */
-	pushw	%es
-	popw	%ds		/* DS=0x07E0 */
+	/* since only one sector is loaded, we assume segment=0x7C0. */
+
+	cmpw	$0x07C0, %bx
+	jbe	3f
+
+	/* move this sector down to 07C0:0000 */
+
+	call	move_down_to_7C00
+	
+	/* CS=0x7C0. */
+3:
+
+	/* setup a safe stack */
+
+	movw	$0x3E00, %sp	/* SS:SP=0000:3E00 */
+	cmpw	$0x03E0, %bx	/* BX=DS, BX=CS or BX > 0x7C0 */
+	jnb	3f
+	addw	%sp, %sp	/* SS:SP=0000:7C00 */
+3:
+	sti	/* now we have enough stack room. */
 
 	/* clear the destination sector */
 	xorw	%ax, %ax
+	movw	%ax, %ds	/* let DS=0 to match SS=0 */
 	xorw	%di, %di
 	movw	$0x100, %cx
 	cld
@@ -314,7 +338,7 @@ gdt_end:
 
 	/* read 127 sectors of drive 0x80 or drive 0x00 to 07E0:0000 */
 
-	movb	$0x80, %dl	/* hard drive */
+	movb	$0x80, %dl	/* try hard drive first */
 1:
 	xorl	%eax, %eax
 	pushaw
@@ -324,7 +348,7 @@ gdt_end:
 	pushw	%ax
 	pushw	$127	//$63
 	pushw	$0x10
-	movw	%sp, %si
+	movw	%sp, %si	/* DS:SI=SS:SP=disk address packet */
 	movw	$0x4200, %ax
 	call	int13
 	popaw
@@ -337,13 +361,13 @@ gdt_end:
 	movw	$((0x200 - 0x5A) / 2), %cx
 	cs repz cmpsw
 	je	1f
-	testb	%dl, %dl
-	je	Error_or_prev_MBR	/* Missing helper */
-	movb	$0, %dl		/* floppy */
+	testb	%dl, %dl	/* floppy tried? */
+	je	Error_or_prev_MBR	/* yes. fail */
+	movb	$0, %dl		/* then try floppy */
 	jmp	1b
 1:
 
-	movw	%ds, %bx
+	movw	%es, %bx
 	addw	$((wee63_signature - _start1 + 4 + STAGE2_SIZE - 4) >> 4), %bx
 	movw	%bx, %ds
 

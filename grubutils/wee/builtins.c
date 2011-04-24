@@ -1224,7 +1224,7 @@ map_func (char *arg/*, int flags*/)
   else
   {
     (*(unsigned short *)(void *)(&(bios_drive_map[i]))) = from | (to << 8);
-    grub_memset ((void *)(&(bios_drive_map[i])) + 2, 0, DRIVE_MAP_SLOT_SIZE - 2);
+    grub_memset ((void *)((int)(&(bios_drive_map[i])) + 2), 0, DRIVE_MAP_SLOT_SIZE - 2);
   }
   
   return 0;
