@@ -167,7 +167,7 @@ int check_mbr_data(char *mbr)
 
 int help(void)
 {
-	printf("weesetup v1.2.\n");
+	printf("weesetup v1.3.\n");
 	printf("Usage:\n\tweesetup [OPTIONS] DEVICE\n\nOPTIONS:");
 	printf("\n\t-i wee63.mbr\t\tUse a custom wee63.mbr file.\n");
 	printf("\n\t-o outfile\t\tExport new wee63.mbr to outfile.\n");
@@ -274,13 +274,16 @@ int main( int argc, char *argv[] )
 				read_disk(xd, mbr_data ,63);
 				xd_close (xd);
 				fd = open( "backup.mbr", O_WRONLY | O_CREAT | O_BINARY | O_TRUNC, 0666 );
-				size = write(fd, mbr_data, MAX_DATA_SIZE);
-				close(fd);
-				if (size != MAX_DATA_SIZE)
+				if (fd != -1)
 				{
-					goto quit;
+					size = write(fd, mbr_data, MAX_DATA_SIZE);
+					close(fd);
+					if (size != MAX_DATA_SIZE)
+					{
+						goto quit;
+					}
+					printf("Backup %s MBR to backup.mbr.\n",mbr_filename);
 				}
-				printf("Backup %s MBR to backup.mbr.\n",mbr_filename);
 				install_flag |= 4;
 			}
 		}
@@ -351,6 +354,11 @@ int main( int argc, char *argv[] )
 	if (out_filename)
 	{
 		fd = open( out_filename, O_WRONLY | O_CREAT | O_BINARY | O_TRUNC, 0666 );
+		if (fd == -1)
+		{
+			printf("Error: Create file %s\n",out_filename);
+			goto quit;
+		}
 		size = write(fd, wee63_data,MAX_DATA_SIZE);
 		close(fd);
 		printf("Saved outfile %s.\n",out_filename);
