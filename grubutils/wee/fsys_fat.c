@@ -122,6 +122,7 @@ struct fat_superblock
 
 #define FAT_CACHE_SIZE 2048
 
+#if 0
 int
 fat_mount (void)
 {
@@ -259,6 +260,7 @@ fat_mount (void)
   FAT_SUPER->cached_fat = - 2 * FAT_CACHE_SIZE;
   return 1;
 }
+#endif
 
 unsigned long
 fat_read (unsigned long long buf, unsigned long long len, unsigned long write)

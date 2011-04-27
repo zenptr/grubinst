@@ -1115,11 +1115,9 @@ map_func (char *arg/*, int flags*/)
   unsigned long to, from;
   int i;
   
-  for (;;)
-  {
+#if 0
     if (grub_memcmp (arg, "--status", 8) == 0)
       {
-#if 0
 	int j;
 	if (rd_base != -1ULL)
 	    grub_printf ("\nram_drive=0x%X, rd_base=0x%lX, rd_size=0x%lX\n", ram_drive, rd_base, rd_size); 
@@ -1159,10 +1157,10 @@ map_func (char *arg/*, int flags*/)
 	      }
 		  grub_printf ("%02X %02X %02X %02X %04X %02X %02X %016lX %016lX %c<%c\n", bios_drive_map[i].from_drive, bios_drive_map[i].to_drive, bios_drive_map[i].max_head, bios_drive_map[i].max_sector, bios_drive_map[i].to_cylinder, bios_drive_map[i].to_head, bios_drive_map[i].to_sector, (unsigned long long)bios_drive_map[i].start_sector, (unsigned long long)bios_drive_map[i].sector_count, ((bios_drive_map[i].to_cylinder & 0x4000) ? 'C' : bios_drive_map[i].to_drive < 0x80 ? 'F' : bios_drive_map[i].to_drive == 0xFF ? 'M' : 'H'), ((bios_drive_map[i].max_sector & 0x80) ? ((bios_drive_map[i].to_sector & 0x40) ? 'F' : 'R') :((bios_drive_map[i].to_sector & 0x40) ? 'S' : 'U')));
 	  }
-#endif
 	return 1;
       }
-    else if (grub_memcmp (arg, "--hook", 6) == 0)
+#endif
+    if (grub_memcmp (arg, "--hook", 6) == 0)
       {
 	char *p;
 
@@ -1174,16 +1172,12 @@ map_func (char *arg/*, int flags*/)
 	*(long *)PART_TABLE_BUF = buf_drive = buf_track = -1LL;
 	return 1;
       }
-    else if (grub_memcmp (arg, "--unhook", 8) == 0)
+    if (grub_memcmp (arg, "--unhook", 8) == 0)
       {
 	unset_int13_handler (0);
 	*(long *)PART_TABLE_BUF = buf_drive = buf_track = -1LL;
 	return 1;
       }
-    else
-	break;
-    arg = skip_to (arg);
-  }
   
   to_drive = arg;
   from_drive = skip_to (arg);

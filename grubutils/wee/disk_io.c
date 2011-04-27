@@ -696,7 +696,7 @@ setup_part (char *filename)
 	if (current_drive != saved_drive
 	   || current_partition != saved_partition
 	   || (*filename == '/' && fsys_type == NUM_FSYS)
-	   /*|| buf_drive == -1*/)
+	   || buf_drive == -1)
 	{
 	    current_drive = saved_drive;
 	    current_partition = saved_partition;

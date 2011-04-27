@@ -82,7 +82,7 @@
 
 #define NO_DECOMPRESSION
 #define BIOSDISK_FLAG_LBA_EXTENSION	0x1
-#include "extra.h"
+//#include "extra.h"
 
 /* 512-byte scratch area */
 #define SCRATCHADDR  0x3fe00

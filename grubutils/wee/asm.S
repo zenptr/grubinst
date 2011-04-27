@@ -10456,6 +10456,200 @@ ENTRY(attempt_mount)
 	movl	$0, %eax
 	ret
 
+#if 1
+/*
+ * int fat_mount (void)
+ */
+
+ENTRY(fat_mount)
+
+	.code32
+
+	// FSYS_BUF  = 0x3E0000 (this may vary)
+	// FAT_SUPER = 0x3E7E00
+	// FAT_BPB   = 0x3E7E40
+	// magic     = 0x3E7E80
+	// first_fat = 0x3E7E84
+
+	xorl	%eax, %eax			// EAX=0 for failure
+
+	pushl	%ebp
+
+	movl	$(FSYS_BUF+0x7E40), %ebp	// EBP=FAT_BPB
+
+	/* read the BPB sector */
+	pushl	$0xedde0d90			// GRUB_READ
+	pushl	%eax				// buffer hi = 0
+	pushl	%ebp				// buffer lo = bpb
+	pushl	%eax				// length hi = 0
+	pushl	$0x40				// length lo = 64
+	pushl	%eax				// byte_offset = 0
+	pushl	%eax				// sector hi = 0
+	pushl	%eax				// sector lo = 0
+	call	EXT_C(devread)
+	addl	$0x20, %esp
+	testl	%eax, %eax			// read failure?
+	jz	1f				// yes, return 0
+
+	xorl	%eax, %eax			// EAX=0 for failure
+	cmpw	$0x200, 0x0B(%ebp)		// bytes per sector must = 512
+	jnz	1f				// fail, return 0
+	cmpw	$0, 0x0E(%ebp)			// reserved_sects must <> 0
+	jz	1f				// fail, return 0
+	movb	0x10(%ebp), %dl			// num_fats must = 1 or 2
+	decl	%edx
+	cmpb	$1, %dl
+	ja	1f				// fail, return 0
+	movw	0x18(%ebp), %dx			// secs_track must = 1..63
+	decl	%edx
+	cmpw	$62, %dx
+	ja	1f				// fail, return 0
+	movw	0x1A(%ebp), %dx			// heads must = 1..256
+	decl	%edx
+	cmpw	$255, %dx
+	ja	1f				// fail, return 0
+
+	movzbl	0x0D(%ebp), %edx		// sectors per cluster
+	movl	%edx, (36-64)(%ebp)		// FAT_SUPER->sects_per_clust
+	bsfl	%edx, %ecx
+	jz	1f				// fail, return 0
+
+	pushl	%edx
+	shrl	%cl, %edx
+	decl	%edx
+	popl	%edx
+	jz	2f				// fail, return 0
+1:
+	popl	%ebp
+	ret
+2:
+	pushl	%ecx				// CL = sects_per_clust_bits
+
+	shll	$9, %edx			// bytes per cluster
+	movl	%edx, (40-64)(%ebp)		// FAT_SUPER->clustsize
+
+	movzwl	0x13(%ebp), %ecx		// short_sectors
+	movl	0x20(%ebp), %edx		// long_sectors
+	jecxz	2f
+	movl	%ecx, %edx
+2:
+	movl	%edx, (24-64)(%ebp)		// FAT_SUPER->num_sectors
+
+	pushl	%edx				// FAT_SUPER->num_sectors
+
+	movzwl	0x0E(%ebp), %edx		// reserved_sects
+	movl	%edx, (0-64)(%ebp)		// FAT_SUPER->fat_offset
+
+	pushl	%edx				// FAT_SUPER->fat_offset
+
+	movzwl	0x16(%ebp), %ecx		// fat_length
+	movl	0x24(%ebp), %edx		// fat32_length
+	jecxz	2f
+	movl	%ecx, %edx
+2:
+
+	xchgl	%eax, %ecx			// save ECX to EAX
+
+	movl	%edx, (4-64)(%ebp)		// FAT_SUPER->fat_length
+
+	movb	0x10(%ebp), %cl			// num_fats = 1 or 2
+	decl	%ecx				// CL= 0 or 1
+	shll	%cl, %edx
+
+	popl	%ecx				// FAT_SUPER->fat_offset
+
+	addl	%edx, %ecx
+	movl	%ecx, (12-64)(%ebp)		// FAT_SUPER->root_offset
+
+	movzwl	0x11(%ebp), %edx		// dir_entries
+	shll	$5, %edx
+	movl	%edx, (16-64)(%ebp)		// FAT_SUPER->root_max
+	addl	$(0x200 - 1), %edx
+	shrl	$9, %edx
+	addl	%edx, %ecx
+	movl	%ecx, (20-64)(%ebp)		// FAT_SUPER->data_offset
+
+	popl	%edx				// FAT_SUPER->num_sectors
+	subl	%ecx, %edx
+
+	popl	%ecx				// CL = sects_per_clust_bits
+
+	shrl	%cl, %edx
+	incl	%edx
+	incl	%edx
+	movl	%edx, (28-64)(%ebp)		// FAT_SUPER->num_clust
+
+	xchgl	%eax, %ecx			// restore ECX from EAX
+	xorl	%eax, %eax
+	jecxz	2f				// FAT32
+
+	/* FAT12/16 */
+	cmpl	%eax, (16-64)(%ebp)		// FAT_SUPER->root_max
+	jz	1f				// fail, return 0
+
+	decl	%eax
+	movl	%eax, (44-64)(%ebp)		// FAT_SUPER->root_cluster = -1
+
+	incl	%eax				// EAX=0
+	movl	$4, %ecx			// FAT16
+	cmpl	$4087, %edx
+	movl	$0xFFF8, %edx
+ 	ja	3f
+	decl	%ecx				// ECX=3
+	movl	$0xFF8, %edx
+	jmp	3f
+2:
+	/* FAT32 */
+	cmpw	%ax, 0x11(%ebp)			// dir_entries must = 0
+	jnz	1f				// fail,return 0
+
+	movzbl	0x28(%ebp), %ecx		// fat32 flags
+	testb	%cl, %cl			// FAT mirroring enabled?
+	jns	2f				// yes.
+	/* FAT mirroring is disabled, get active FAT */
+	andb	$0x0F, %cl
+	cmpb	0x10(%ebp), %cl			// num_fats
+	jnb	1f
+
+	jecxz	2f
+	/* CL = 1 */
+	movl	(4-64)(%ebp), %edx		// FAT_SUPER->fat_length
+	addl	%edx, (0-64)(%ebp)		// FAT_SUPER->fat_offset
+2:
+	movl	$8, %ecx			// FAT32
+	movl	$0x0FFFFFF8, %edx
+	movl	0x2C(%ebp), %eax		// root_cluster
+	movl	%eax, (44-64)(%ebp)		// FAT_SUPER->root_cluster = -1
+3:
+	movl	%ecx, (8-64)(%ebp)		// FAT_SUPER->fat_size
+	movl	%edx, (32-64)(%ebp)		// FAT_SUPER->clust_eof_marker
+
+	movl	(28-64)(%ebp), %eax		// FAT_SUPER->num_clust
+	#;cmpl	$2, (28-64)(%ebp)		// FAT_SUPER->num_clust
+	#;jbe	1f				// fail, return 0
+	mull	%ecx				// EDX:EAX=result
+
+	movl	%edx, %ecx
+	pushl	%eax
+	movl	$(2 * 0x200), %eax
+	mull	(4-64)(%ebp)			// FAT_SUPER->fat_length
+	cmpl	%edx, %ecx
+	popl	%ecx
+	jb	2f
+	ja	1f
+	cmpl	%eax, %ecx
+	ja	1f
+2:
+	movl	$(-2 * 2048), (48-64)(%ebp)	// FAT_SUPER->cached_fat
+	movl	$1, %eax			// success, return 1
+	popl	%ebp
+	ret
+1:
+	xorl	%eax, %eax			// EAX=0 for failure
+	popl	%ebp
+	ret
+#endif
+
 /*
  * int biosdisk (int read, int drive, long long sector, int nsec, int segment)
  *

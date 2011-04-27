@@ -1,4 +1,6 @@
 
+2011-04-26 move fat_mount to asm.S.
+2011-04-25 Makefile by Roy(-momit-leaf-frame-pointer to -fomit-frame-pointer).
 2011-04-23 implemented a simplified map command for only whole-drive mappings.
 2011-04-20 added wee127.mbr with the blocklist and map commands built in it.
 2011-03-23 excluded NTFS short filenames.
