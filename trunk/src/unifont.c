@@ -199,17 +199,27 @@ graphics_cursor (int set)
 		WORD bytesPerLine = 0;
 		int dotpos;
 		ReadCharDistX(ch &= 0xffff);
+//		(*(DWORD *)(VARIABLE_ADDR + 0x20)) = GET_FONT_WIDTH(g_dwCharInfo);
 		dotpos = ReadCharDotArray(ch, &bytesPerLine);
 		if (dotpos)
 		{
-			dbcs_ending_byte = GET_FONT_WIDTH(g_dwCharInfo) > FONT_WIDTH;
-			memmove(by, (unsigned char *) RAW_ADDR (BASE_FONT_ADDR + dotpos), 32);
+			dbcs_ending_byte = GET_FONT_WIDTH(g_dwCharInfo) > 8;
 			pat = chsa;
-			for (i = 0;i < 16; i++)
+			
+			if(dbcs_ending_byte)
 			{
-				chsa[i] = by[i][0];
-				chsb[i] = by[i][1];
+				memmove(by, (unsigned char *) RAW_ADDR (BASE_FONT_ADDR + dotpos), 32);
+				for (i = 0;i < 16; i++)
+				{
+					chsa[i] = by[i][0];
+					chsb[i] = by[i][1];
+				}
 			}
+			else
+			{
+				memmove(chsa, (unsigned char *) RAW_ADDR (BASE_FONT_ADDR + dotpos), 16);
+			}
+			dbcs_ending_byte = GET_FONT_WIDTH(g_dwCharInfo) > FONT_WIDTH;
 		}
 	}
 
@@ -549,14 +559,14 @@ int ReadCharDistX(WORD wCode)
 **********************************************************************/
 int ReadCharDotArray(WORD wCode, WORD *bytesPerLine)
 {
-//	*bytesPerLine= (WORD)((GET_FONT_WIDTH(g_dwCharInfo))+7)/PIXELS_PER_BYTE;	
-	*bytesPerLine= (WORD)((GET_FONT_WIDTH(g_dwCharInfo))+7) >> 3;	
+	*bytesPerLine= (WORD)((GET_FONT_WIDTH(g_dwCharInfo))+7)/PIXELS_PER_BYTE;	
+//	*bytesPerLine= (WORD)((GET_FONT_WIDTH(g_dwCharInfo))+7) >> 3;	
 
 	if(g_dwCharInfo > 0)
 	{
-//		DWORD nDataLen = *bytesPerLine * _fl_header->YSize;			
+		DWORD nDataLen = *bytesPerLine * _fl_header->YSize;			
 		/*因为只支持16X16格式所以*/
-		DWORD nDataLen = *bytesPerLine << 4;
+//		DWORD nDataLen = *bytesPerLine << 4;
 		DWORD  dwOffset = GET_FONT_OFFADDR(g_dwCharInfo);    //获取字符点阵的地址信息(低26位)
 		return dwOffset;
 	}

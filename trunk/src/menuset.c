@@ -64,7 +64,7 @@ asm(".long 0xBCBAA7BA");
  * file. Do not insert any other asm lines here.
  */
 
-static int main (char *arg, int flags)
+int main (char *arg, int flags)
 {
 	struct broder tmp_broder = {218,191,192,217,196,179,2,76,2,0,0};
 	char *p=(char *)&tmp_broder;

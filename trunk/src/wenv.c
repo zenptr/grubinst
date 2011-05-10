@@ -266,7 +266,7 @@ asm(".long 0xBCBAA7BA");
 /* thank goodness gcc will place the above 8 bytes at the end of the b.out
  * file. Do not insert any other asm lines here.
  */
-static int main(char *arg,int flags)
+int main(char *arg,int flags)
 {
 	if (*(int *)0x8278 < 20101124)
 	{

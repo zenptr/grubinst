@@ -445,4 +445,5 @@ struct term_entry
   /* function to use to shutdown a terminal */
   void (*SHUTDOWN) (void);
 };
+
 #endif

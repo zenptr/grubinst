@@ -16,7 +16,7 @@ asm(".long 0xBCBAA7BA");
  * file. Do not insert any other asm lines here.
  */
 
-static int main (char *arg,int flags)
+int main (char *arg,int flags)
 {
 	char *filename=arg;
 	char *section;
