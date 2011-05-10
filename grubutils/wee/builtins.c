@@ -67,6 +67,7 @@ struct linux_kernel_header
   unsigned long initrd_addr_max;	/* The highest address of initrd */
 } __attribute__ ((packed));
 
+int read_dbr (void);
 int command_func (char *arg/*, int flags*/);
 
 /* The number of the history entries.  */
@@ -143,6 +144,25 @@ add_history (void)
   *(unsigned short *)p = len;
   grub_strcpy (p + 2, cmdline);
   num_history++;
+}
+
+int
+read_dbr (void)
+{
+	char tmp_str[64];
+
+	grub_sprintf (tmp_str, "(%d,%d)+1",
+		(unsigned char)current_drive,
+		*(((unsigned char *)
+		&current_partition)+2));
+	if (! grub_open (tmp_str))
+		return 0;//! (errnum = ERR_EXEC_FORMAT);
+	if (grub_read (0x7C00, 512, 0xedde0d90) != 512)
+		return ! (errnum = ERR_EXEC_FORMAT);
+
+	if (*((unsigned long *) (0x7C00 + 0x1C)))
+	    *((unsigned long *) (0x7C00 + 0x1C)) = part_start;
+	return 1;
 }
 
 /* command */
@@ -523,19 +543,9 @@ non_linux:
 			&& (unsigned long)filemax > 0x30000)	/* NTLDR */
 		{
 			{
-				char tmp_str[64];
-
-				grub_sprintf (tmp_str, "(%d,%d)+1",
-					(unsigned char)current_drive,
-					*(((unsigned char *)
-						&current_partition)+2));
-				if (! grub_open (tmp_str))
-					return 0;//! (errnum = ERR_EXEC_FORMAT);
-				if (grub_read (0x7C00, 512, 0xedde0d90) != 512)
-					return ! (errnum = ERR_EXEC_FORMAT);
+				int readdbr_ret = 0;
+				if (!(readdbr_ret = read_dbr())) return readdbr_ret;
 			}
-			if (*((unsigned long *) (0x7C00 + 0x1C)))
-			    *((unsigned long *) (0x7C00 + 0x1C)) = part_start;
 
 			boot_entry = 0x20000000; load_addr = 0x20000;
 		} else if (*(short *)prog_start == 0x3EEB
@@ -560,7 +570,31 @@ drdos:
 			chain_edx = current_drive;
 			((char *)(&chain_edx))[1] = ((char *)(&current_partition))[2];
 			chain_ebx = chain_edx;
+			/* begin Roy added 2011-05-08. load DBR to 0000:7C00 */
+			{
+				int readdbr_ret = 0;
+				if (!(readdbr_ret = read_dbr())) return readdbr_ret;
+			}
+			/* end Roy added 2011-05-08. load DBR to 0000:7C00 */
 			HMA_start();   /* no return */
+		/* begin Roy added 2011-05-08. ReactOS support. */
+		} else if (filemax >= 0x40000
+			&& *((short *)(prog_start))==0x5A4D	 // MZ header
+			&& *((short *)(prog_start+0x80))==0x4550 // PE header
+			&& *((short *)(prog_start+0xDC))==0x1	//PE subsystem
+			&& *((long *)(prog_start+0xA8))==0x1000	//Entry address
+			&& *((long *)(prog_start+0xB4))==0x8000	//Base address
+			) /* ReactOS freeldr.sys */
+		{
+			chain_boot_IP = 0x00009000;
+			chain_load_to = 0x8000;
+			chain_load_from = prog_start;
+			chain_load_dword_len = ((load_length + 3) >> 2);
+			chain_edx = current_drive;
+			((char *)(&chain_edx))[1] = ((char *)(&current_partition))[2];
+			chain_ebx = chain_edx;
+			HMA_start();   /* no return */
+		/* end Roy added 2011-05-08. ReactOS support. */
 		} else if ((*(short *)prog_start) == 0x5A4D && filemax > 0x10000
 			&& (*(long *)(prog_start + 0x1FE)) == 0x4A420000
 			&& (*(short *)(prog_start + 0x7FE)) == 0x534D
@@ -600,11 +634,21 @@ drdos:
 			((char *)(&chain_edx))[1] = ((char *)(&current_partition))[2];
 			chain_ebx = 0;
 			HMA_start();   /* no return */
-		} else if ((*(long long *)prog_start == 0x501E0100122E802ELL) /* packed with pack101 */ || ((*(long long *)prog_start | 0xFFFF02LL) == 0x4F43000000FFFFEBLL && (*(((long long *)prog_start)+1) == 0x706D6F435141504DLL)))   /* DR-DOS */
+		/* begin Roy added 2010-12-18. DR-DOS support. */
+		} else if ((*(long long *)prog_start==0x501E0100122E802ELL)
+				/* added 2011-01-07. support packed drbio. */
+			|| (*(long long *)(prog_start+6)==0x646F4D206C616552LL)
+				/* added 2011-05-08. DRMK support. */
+			|| ((*(long long *)prog_start | 0xFFFF02LL) ==
+				0x4F43000000FFFFEBLL &&
+				(*(((long long *)prog_start)+1) ==
+				0x706D6F435141504DLL)))   /* DR-DOS */
 		{
 			chain_boot_IP = 0x00700000;
 			chain_load_to = 0x0700;
 			goto drdos;
+		/* end Roy added 2010-12-18. DR-DOS support. */
+		/* begin Roy added 2010-12-19. ROM-DOS support. */
 		} else if ((*(long long *)(prog_start + 0x200)) == 0xCB5052C03342CA8CLL && (*(long *)(prog_start + 0x208) == 0x5441464B))   /* ROM-DOS */
 		{
 			chain_boot_IP = 0x10000000;
@@ -613,6 +657,7 @@ drdos:
 			chain_load_dword_len = ((load_length - 0x200 + 3) >> 2);
 			*(unsigned long *)0x84 = current_drive | 0xFFFF0000;
 			HMA_start();   /* no return */
+		/* end Roy added 2010-12-19. ROM-DOS support. */
 		} else
 			return ! (errnum = ERR_EXEC_FORMAT);
 
@@ -3985,9 +4030,9 @@ real_root_func (char *arg, int attempt_mnt)
 
       //if (fsys_type != NUM_FSYS || ! next)
       {
-	grub_printf ("(%X,%d):%lx,%lx:%02X,%02X:%s\n"
+	grub_printf ("(0x%02X,%d):%lx,%lx:%02X,%02X:%s\n"
 		, (long)current_drive
-		, (long)(((unsigned char *)(&current_partition))[2])
+		, (unsigned long)(((unsigned short *)(&current_partition))[1])
 		, (unsigned long long)part_start
 		, (unsigned long long)part_length
 		, (long)(((unsigned char *)(&current_partition))[0])

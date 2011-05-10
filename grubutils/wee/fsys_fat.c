@@ -262,6 +262,7 @@ fat_mount (void)
 }
 #endif
 
+#if 0
 unsigned long
 fat_read (unsigned long long buf, unsigned long long len, unsigned long write)
 {
@@ -356,7 +357,9 @@ fat_read (unsigned long long buf, unsigned long long len, unsigned long write)
     }
   return errnum ? 0 : ret;
 }
+#endif
 
+#if 0
 int
 fat_dir (char *dirname)
 {
@@ -552,4 +555,5 @@ valid_filename:
   /* go back to main loop at top of function */
   goto loop;
 }
+#endif
 

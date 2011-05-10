@@ -8682,6 +8682,7 @@ gdtdescHMA:
 	movw	%ax, %es
 	movw	%ax, %ss
 	movl	$0x400, %esp
+	movl	$0x7c00, %ebp	/* Roy added 2011-05-08. DRMK support. */
 	movw	%ax, %fs
 	movw	%ax, %gs
 
@@ -10648,6 +10649,633 @@ ENTRY(fat_mount)
 	xorl	%eax, %eax			// EAX=0 for failure
 	popl	%ebp
 	ret
+#endif
+
+#if 1
+/*
+ * unsigned long fat_read (unsigned long long buf, unsigned long long len, unsigned long write);
+ */
+
+ENTRY(fat_read)
+
+	.code32
+
+	// FSYS_BUF  = 0x3E0000 (this may vary)
+	// FAT_SUPER = 0x3E7E00 (64 bytes)
+
+#define	FAT_BUF	(FSYS_BUF + 30208)
+
+	xorl	%eax, %eax			// EAX=0 for failure
+
+	pushl	%ebp
+	movl	%esp, %ebp
+
+#define	buf		8(%ebp)
+#define	buf_hi		12(%ebp)
+#define	len		16(%ebp)
+#define	len_hi		20(%ebp)
+#define	write		24(%ebp)
+
+	pushl	%esi
+
+	movl	$(FSYS_BUF+0x7E40), %esi	// ESI -> logical_clust
+
+/* memory use must avoid conflict with fat_dir */
+#define	logical_clust	64(%esi)
+#define	offset		68(%esi)
+#define	ret_val		72(%esi)
+#define	size		76(%esi)
+#define	fat_entry	80(%esi)
+#define	next_cluster	84(%esi)
+#define	cached_pos	88(%esi)
+
+	movl	%eax, ret_val		// ret = 0
+
+	cmpl	%eax, (52-64)(%esi)	// FAT_SUPER->file_cluster
+	jge	3f
+	/* root directory for fat16 */
+	movl	(16-64)(%esi), %edx		// FAT_SUPER->root_max
+	subl	ABS(EXT_C(filepos)), %edx	// size
+	cmpl	len, %edx
+	jbe	4f
+	movl	len, %edx
+4:
+	pushl	%edx
+	/* read root dir to buf */
+	pushl	$0xedde0d90		// GRUB_READ
+	pushl	%eax			// buffer hi = 0
+	pushl	buf			// buffer lo = buf
+	pushl	%eax			// length hi = 0
+	pushl	%edx			// length lo = EDX
+	pushl	ABS(EXT_C(filepos))	// byte_offset = filepos
+	pushl	%eax			// sector hi = 0
+	pushl	(12-64)(%esi)		// sector lo=FAT_SUPER->root_offset
+	call	EXT_C(devread)
+	addl	$0x20, %esp
+	popl	%edx
+	testl	%eax, %eax		// read failure?
+	jz	1f			// yes, return 0
+	addl	%edx, ABS(EXT_C(filepos))
+	xchgl	%eax, %edx		// let EAX=size
+	//jmp	1f			// return size
+1:
+	popl	%esi
+	popl	%ebp
+	ret
+3:
+	// EAX = 0
+	movl	ABS(EXT_C(filepos)), %edx
+	xchgl	%eax, %edx		// EDX:EAX=filepos
+	divl	(40-64)(%esi)		// FAT_SUPER->clustsize
+	movl	%eax, logical_clust
+	movl	%edx, offset
+	xorl	%edx, %edx
+	cmpl	(56-64)(%esi), %eax	// FAT_SUPER->current_cluster_num
+	jnb	3f
+	movl	%edx, (56-64)(%esi)	// FAT_SUPER->current_cluster_num
+	movl	(52-64)(%esi), %eax	// FAT_SUPER->file_cluster
+	movl	%eax, (60-64)(%esi)	// FAT_SUPER->current_cluster
+3://outer
+	/* while (len > 0) */
+	// EDX = 0
+	cmpl	%edx, len
+	jnz	4f
+	movl	ret_val, %eax
+	cmpl	%edx, ABS(EXT_C(errnum))	// errnum == 0 ?
+	jz	5f				// yes, no error.
+	xorl	%eax, %eax			// fail, return 0
+5:
+	jmp	1b				// return
+4://inner
+	/* while (logical_clust > FAT_SUPER->current_cluster_num) */
+
+	movl	logical_clust, %eax
+	cmpl	(56-64)(%esi), %eax	// FAT_SUPER->current_cluster_num
+	jbe	5f			// exit inner loop
+	/* calculate next cluster */
+	movl	(60-64)(%esi), %eax	// FAT_SUPER->current_cluster
+	mull	(8-64)(%esi)		// FAT_SUPER->fat_size
+					// EDX:EAX=fat_entry
+	movl	%eax, fat_entry
+	subl	(48-64)(%esi), %eax	// FAT_SUPER->cached_fat
+	movl	%eax, cached_pos
+	jc	6f
+	addl	(8-64)(%esi), %eax	// FAT_SUPER->fat_size
+	cmpl	$(2 * 2048), %eax
+	jbe	7f
+6:
+	movl	fat_entry, %edx
+	pushl	%edx
+	andl	$(~(2 * 2048 - 1)), %edx
+	movl	%edx, (48-64)(%esi)	// FAT_SUPER->cached_fat
+	popl	%eax
+	andl	$((2 * 2048 - 1)), %eax
+	movl	%eax, cached_pos
+
+	xorl	%eax, %eax
+	/* read FAT */
+	pushl	$0xedde0d90		// GRUB_READ
+	pushl	%eax			// buffer hi = 0
+	pushl	$FAT_BUF		// buffer lo = FAT_BUF
+	pushl	%eax			// length hi = 0
+	pushl	$2048			// length lo = 2048
+	pushl	%eax			// byte_offset = 0
+	pushl	%eax			// sector hi = 0
+	shrl	$(9 + 1), %edx
+	addl	(0-64)(%esi), %edx	// FAT_SUPER->fat_offset
+	pushl	%edx			// sector lo = sector
+	call	EXT_C(devread)
+	addl	$0x20, %esp
+	testl	%eax, %eax		// read failure?
+	jz	1b			// yes, return 0
+7:
+	movl	cached_pos, %eax
+	shrl	$1, %eax
+	addl	$FAT_BUF, %eax
+	movl	(%eax), %eax		// next_cluster
+	//movl	%eax, next_cluster
+
+	movl	(8-64)(%esi), %ecx	// FAT_SUPER->fat_size
+	cmpb	$3, %cl
+	jne	7f
+	testb	$1, cached_pos
+	jz	8f
+	shrl	$4, %eax		// next_cluster
+8:
+	andl	$0x0FFF, %eax
+	jmp	8f
+7:
+	cmpb	$4, %cl
+	jne	8f
+	andl	$0xFFFF, %eax
+8:
+	cmpl	(32-64)(%esi), %eax	// FAT_SUPER->clust_eof_marker
+	jb	8f
+	movl	ret_val, %eax
+	jmp	1b			// return
+8:
+	cmpl	$2, %eax
+	jb	7f
+	cmpl	(28-64)(%esi), %eax	// FAT_SUPER->num_clust
+	jb	8f
+7:
+	movl	$ERR_FSYS_CORRUPT, ABS(EXT_C(errnum))
+	xorl	%eax, %eax		// return 0
+	jmp	1b
+8:
+	movl	%eax, (60-64)(%esi)	// FAT_SUPER->current_cluster
+	incl	(56-64)(%esi)		// FAT_SUPER->current_cluster_num
+	jmp	4b			// loop inner
+5:
+
+	/* root directory for fat16 */
+	movl	(40-64)(%esi), %edx	// FAT_SUPER->clustsize
+	subl	offset, %edx		// size
+	cmpl	len, %edx
+	jbe	4f
+	movl	len, %edx
+4:
+	// EDX = size
+	pushl	%edx			// size
+
+	movl	EXT_C(disk_read_hook), %eax
+	movl	%eax, EXT_C(disk_read_func)
+
+	xorl	%eax, %eax
+
+	pushl	write
+	pushl	%eax			// buffer hi = 0
+	pushl	buf			// buffer lo = buf
+	pushl	%eax			// length hi = 0
+	pushl	%edx			// length lo = size
+	pushl	offset			// byte_offset = offset
+	pushl	%eax			// sector hi = 0
+
+	movl	(60-64)(%esi), %eax	// FAT_SUPER->current_cluster
+	decl	%eax
+	decl	%eax
+	mull	(36-64)(%esi)		// FAT_SUPER->sects_per_clust
+					// EDX:EAX=result
+	addl	(20-64)(%esi), %eax	// FAT_SUPER->data_offset
+	pushl	%eax			// sector lo = sector
+	call	EXT_C(devread)
+	addl	$0x20, %esp
+
+	xorl	%edx, %edx
+	movl	%edx, EXT_C(disk_read_func)
+
+	popl	%eax			// size
+
+	subl	%eax, len
+	cmpl	%edx, buf
+	jz	4f
+	addl	%eax, buf
+4:
+	addl	%eax, ret_val
+	addl	%eax, ABS(EXT_C(filepos))
+	//adcl	%edx, ABS(EXT_C(filepos)) + 4
+	incl	logical_clust
+	movl	%edx, offset
+	// EDX = 0 
+	jmp	3b			// loop outer
+
+#undef	logical_clust
+#undef	offset
+#undef	ret_val
+#undef	size
+#undef	fat_entry
+#undef	next_cluster
+#undef	cached_pos
+
+#undef	buf
+#undef	buf_hi
+#undef	len
+#undef	len_hi
+#undef	write
+
+#endif
+
+#if 1
+/*
+ * int fat_dir (char *dirname);
+ */
+
+ENTRY(fat_dir)
+
+	.code32
+
+	// FSYS_BUF  = 0x3E0000 (this may vary)
+	// FAT_SUPER = 0x3E7E00 (64 bytes)
+
+#define	NAME_BUF	(FSYS_BUF + 28160)
+#define	UTF8_BUF	(FSYS_BUF + 25600)
+
+	cld
+	xorl	%eax, %eax			// EAX=0 for failure
+
+	pushl	%ebp
+
+	movl	$(FSYS_BUF+0x7E40), %ebp	// EBP=dir_buf
+
+	movl	8(%esp), %eax			// dirname
+
+	pushl	%edi
+	leal	32(%ebp), %edi			// dirname
+	stosl
+
+	movl	$NAME_BUF, %eax
+	stosl
+
+	movl	$UTF8_BUF, %eax
+	stosl
+
+	movl	$0x10, %eax		// FAT_ATTRIB_DIR
+	stosl				// attrib
+
+	xorl	%eax, %eax
+	decl	%eax			// EAX = -1
+	stosl				// alias_checksum
+	decl	%eax			// EAX = -2
+	stosl				// slot
+
+/* memory use must avoid conflict with fat_read */
+#define	dir_buf		%ebp	// 32 bytes
+#define	dirname		32(%ebp)
+#define	filename	36(%ebp)
+#define	utf8		40(%ebp)
+#define	attrib		44(%ebp)
+#define	alias_checksum	48(%ebp)
+#define	slot		52(%ebp)
+#define	rest		56(%ebp)
+#define	ch_1		60(%ebp)
+
+
+	movl	(44-64)(%ebp), %eax	// FAT_SUPER->root_cluster
+	movl	%eax, (52-64)(%ebp)	// FAT_SUPER->file_cluster
+
+	pushl	%esi
+
+	movl	dirname, %edi
+
+	/* main loop to find desired directory entry */
+
+1: //loop:
+
+	xorl	%eax, %eax		// EAX = 0
+	movl	%eax, ABS(EXT_C(filepos))
+	decl	%eax			// EAX = -1
+	movl	%eax, (56-64)(%ebp)	// FAT_SUPER->current_cluster_num
+
+	/* if we have a real file (and we're not just printing possibilities),
+	   then this is where we want to exit */
+
+	movb	(%edi), %dl
+	andb	$0xDF, %dl		// Space or Null ?
+	jnz	3f
+	incl	%eax			// EAX = 0
+	incl	%eax			// EAX = 1
+	testb	$0x10, attrib
+	jz	4f
+5:
+	movl	$ERR_BAD_FILETYPE, ABS(EXT_C(errnum))
+	xorl	%eax, %eax		// EAX = 0
+4:
+	popl	%esi
+	popl	%edi
+	popl	%ebp
+	ret
+3:
+	testb	$0x10, attrib
+	jz	5b
+
+	/* Directories don't have a file size */
+	movl	%eax, ABS(EXT_C(filemax))	// EAX = -1
+
+	/* continue with the file/directory name interpretation */
+
+	/* skip over slashes */
+	xchgl	%eax, %ecx		// ECX = -1
+	movb	$'/', %al
+	repz scasb
+	jz	5b
+	decl	%edi			// EDI = dirname
+
+	/* check if DIRNAME ends in slash(saved in CH) and end it in NULL */
+	movl	%edi, %esi		// ESI = rest
+3:
+	lodsb
+	cmpb	$0, %al
+	jz	3f
+	cmpb	$0x20, %al
+	jz	3f
+	cmpb	$'/', %al
+	jz	3f
+	cmpb	$'\\', %al
+	jne	3b
+	lodsb
+	cmpb	$0, %al
+	jne	3b
+3:
+	movb	%al, ch_1
+	decl	%esi
+	movb	$0, (%esi)
+
+2: //loop2:
+
+	/* while (1) */
+
+	/* read the dir entry */
+
+	xorl	%eax, %eax		// EAX = 0
+	pushl	$0xedde0d90		// GRUB_READ
+	pushl	%eax			// length hi = 0
+	pushl	$32			// length lo = FAT_DIRENTRY_LENG
+	pushl	%eax			// buffer hi = 0
+	pushl	%ebp			// buffer lo = dir_buf
+	call	EXT_C(fat_read)
+	xorl	%edx, %edx
+	addl	$0x14, %esp
+	cmpl	$32, %eax
+	jne	3f			/* read failure */
+	cmpb	%dl, (%ebp)		// dir_buf[0] == 0 ?
+	jne	6f
+	/* end of dir entries */
+3:
+	cmpl	%edx, ABS(EXT_C(errnum))
+	jne	7f
+	movl	EXT_C(print_possibilities), %eax
+	testl	%eax, %eax
+	jns	8f
+	/* previously succeeded, so return success */
+	movb	ch_1, %al
+	movb	%al, (%esi)
+	xchgl	%eax, %edx		// let EAX = 0
+	incl	%eax			// EAX = 1
+9:
+	popl	%esi
+	popl	%edi
+	popl	%ebp
+	ret
+8:
+	movl	$ERR_FILE_NOT_FOUND, ABS(EXT_C(errnum))
+7:
+	movb	ch_1, %al
+	movb	%al, (%esi)
+	xchgl	%eax, %edx		// let EAX = 0
+	jmp	9b
+6:
+	/* EAX == 32, EDX == 0 */
+
+	cmpb	$0x0F, 11(%ebp)		// long name ?
+	jne	3f			// no, short name.
+
+	/* long name */
+
+	movb	(%ebp), %al
+	testb	$0x40, %al
+	jz	4f
+	andb	$0x3F, %al
+	pushl	%eax			// id
+	movl	%eax, slot
+	movb	$(2 * 13), %dl
+	mull	%edx			// EDX=0, EAX=product
+	movl	%edx, NAME_BUF(%eax)	// end filename with null
+	movb	13(%ebp), %al
+	movb	%al, alias_checksum
+	popl	%eax			// id
+4:
+	cmpl	%eax, slot
+	jne	4f
+	cmpl	%edx, slot
+	je	4f
+	movb	13(%ebp), %al
+	cmpb	%al, alias_checksum
+	je	5f
+4:
+	decl	%edx			// EDX = -1
+	movl	%edx, alias_checksum
+	jmp	2b			// continue
+5:
+	decl	slot
+	movb	$(2 * 13), %al
+	mull	slot			// EDX=0, EAX=product
+	pushl	%esi
+	pushl	%edi
+	leal	NAME_BUF(%eax), %edi
+	leal	1(%ebp), %esi
+	movsl
+	movsl
+	movsl
+	incl	%esi			// ESI=EBP+14
+	decl	%edi
+	decl	%edi
+	movsl
+	movsl
+	movsl
+	incl	%esi
+	incl	%esi			// ESI=EBP+28
+	movsl
+	popl	%edi
+	popl	%esi
+	jmp	2b			// continue
+3:
+
+	/* short name */
+
+	/* EAX == 32, EDX == 0 */
+
+	cmpb	$0xE5, (%ebp)		// dir_buf[0] == 0xE5 ?
+	je	2b			// continue
+
+	movb	11(%ebp), %al
+	movb	%al, attrib		// update attrib now!
+	movb	%dl, 11(%ebp)		// clear for null end filename
+
+	testb	$0xC8, attrib
+	jnz	2b			// continue
+
+	cmpl	%edx, slot		// EDX = 0
+	jnz	3f
+
+	decl	%edx			// EDX = -1
+	cmpl	%edx, alias_checksum
+	je	3f
+
+	decl	%edx			// EDX = -2
+	movl	%edx, slot
+
+	pushl	%esi
+	movl	%ebp, %esi
+	xorl	%eax, %eax
+4:
+	ror	$1, %ah
+	addb	%al, %ah
+	lodsb
+	cmpb	$0, %al
+	jne	4b
+	popl	%esi
+	cmpb	%ah, alias_checksum
+	je	5f
+
+3:
+	/* XXX convert to 8.3 filename format here */
+
+	pushl	%esi
+	pushl	%edi
+	pushl	%ebx
+	movl	%ebp, %esi
+	leal	8(%ebp), %ebx
+	movl	%ebx, %ecx
+	movl	$NAME_BUF, %edi
+	xorl	%eax, %eax
+7:
+	lodsb
+	cmpb	$0, %al
+	je	6f
+	cmpb	$0x20, %al
+	je	6f
+	/* tolower */
+	cmpb	$'A', %al
+	jb	4f
+	cmpb	$'Z', %al
+	ja	4f
+	orb	$0x20, %al
+4:
+	stosw
+	cmpl	%ebx, %esi
+	jb	7b
+6:
+	cmpl	%ecx, %ebx
+	jne	6f
+	movl	%ebx, %esi
+	leal	11(%ebp), %ebx
+
+	lodsb
+	andb	$0xDF, %al
+	jz	6f
+	
+	movb	$'.', %al
+	stosw
+	decl	%esi
+	jmp	7b
+6:
+	movb	$0, %al
+	stosw
+
+	popl	%ebx
+	popl	%edi
+	popl	%esi
+
+5://valid_filename:
+
+	pushl	$832
+	pushl	$UTF8_BUF
+	pushl	$NAME_BUF
+	call	EXT_C(unicode_to_utf8)
+	addl	$0x0C, %esp
+
+	xorl	%edx, %edx		// EDX = 0
+	cmpl	%edx, EXT_C(print_possibilities)
+	je	5f
+	cmpb	$'/', ch_1
+	je	5f
+
+	incl	%edx			// EDX = 1
+	pushl	%edx
+	pushl	$UTF8_BUF
+	pushl	%edi			// dirname
+	call	EXT_C(substring)
+	//addl	$0x0C, %esp
+	popl	%ecx			// adjust stack
+	testl	%eax, %eax
+	jg	6f
+	movl	EXT_C(print_possibilities), %eax
+	testl	%eax, %eax
+	js	7f
+	negl	EXT_C(print_possibilities)
+7:
+	call	EXT_C(print_a_completion)
+6:
+	popl	%ecx			// adjust stack
+	popl	%ecx			// adjust stack
+9:
+	jmp	2b
+5:
+
+	incl	%edx			// EDX = 1
+	pushl	%edx
+	pushl	$UTF8_BUF
+	pushl	%edi			// dirname
+	call	EXT_C(substring)
+	addl	$0x0C, %esp
+	testl	%eax, %eax
+	jnz	9b
+
+	movl	%esi, %edi		// dirname
+	movb	ch_1, %al
+	//stosb				// EDI changed!
+	movb	%al, (%esi)
+
+	movl	28(%ebp), %edx
+	movl	%edx, ABS(EXT_C(filemax))
+
+	movl	20(%ebp), %eax
+	shll	$16, %eax
+	movw	26(%ebp), %ax
+	movl	%eax, (52-64)(%ebp)	// FAT_SUPER->file_cluster
+
+	jmp	1b			// loop
+
+#undef	dir_buf
+#undef	dirname
+#undef	filename
+#undef	utf8
+#undef	attrib
+#undef	alias_checksum
+#undef	slot
+#undef	rest
+#undef	ch_1
+
 #endif
 
 /*

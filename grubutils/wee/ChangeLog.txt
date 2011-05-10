@@ -1,4 +1,9 @@
 
+2011-05-09 (Roy)packed up a snippet of code to form read_dbr().
+2011-05-08 (Roy)supported Dell Real-Mode Kernel(DRMK) and ReactOS freeldr.
+2011-05-06 move fat_dir to asm.S.
+2011-04-30 move fat_read to asm.S.
+2011-04-29 corrected the output message of root command.
 2011-04-26 move fat_mount to asm.S.
 2011-04-25 Makefile by Roy(-momit-leaf-frame-pointer to -fomit-frame-pointer).
 2011-04-23 implemented a simplified map command for only whole-drive mappings.
