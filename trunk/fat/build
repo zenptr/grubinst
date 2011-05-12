@@ -6,6 +6,16 @@ _TIME_d=`date +%-d`
 _TIME_H=`date +%-H`
 _TIME_M=`date +%-M`
 _TIME_S=`date +%-S`
+ASMDATE=`date -u +".long "%Y%m%d`
+CC=${CC:-gcc}
+NOBUILDID=${NOBUILDID:-0}
+
+if [ "$NOBUILDID" == "0" ]; then
+	BUILDID=-Wl,--build-id=none
+else
+	BUILDID=
+fi
+
 echo "#define _TIME_Y $_TIME_Y" >fat_config.h
 echo "#define _TIME_m $_TIME_m" >>fat_config.h
 echo "#define _TIME_d $_TIME_d" >>fat_config.h
@@ -13,8 +23,8 @@ echo "#define _TIME_H $_TIME_H" >>fat_config.h
 echo "#define _TIME_M $_TIME_M" >>fat_config.h
 echo "#define _TIME_S $_TIME_S" >>fat_config.h
 echo "#define GET_FATTIME" >>fat_config.h
-gcc -I../src/include/ -nostdlib -DASM_BUILD_DATE="\"`date -u +".long "%Y%m%d`"\" -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE fat.c ff.c -o fat.o
-gcc -I../src/include/ -DFAT_MINI -DASM_BUILD_DATE="\"`date -u +".long "%Y%m%d`"\" -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE fat.c ff.c -o fatmini.o
+gcc -I../src/include/ -nostdlib -DASM_BUILD_DATE="\"$ASMDATE"\" -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE fat.c ff.c -o fat.o
+gcc -I../src/include/ -DFAT_MINI -DASM_BUILD_DATE="\"$ASMDATE"\" -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE fat.c ff.c -o fatmini.o
 objcopy -O binary fat.o fat
 objcopy -O binary fatmini.o fatmini
 rm fat*.o
