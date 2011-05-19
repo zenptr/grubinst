@@ -4546,6 +4546,90 @@ static struct builtin builtin_pause =
   pause_func,
 };
 
+void hexdump(unsigned long ofs, char* buf, unsigned long len);
+
+void hexdump(unsigned long ofs, char* buf, unsigned long len)
+{
+  //buf &= 0xFFFFFFF0;
+  ofs &= 0xFFFFFFF0;
+  buf = (char *)ofs;
+  len += 15;
+  len &= 0xFFFFFFF0;
+  while (len>0)
+    {
+      unsigned long cnt, k;
+
+      grub_printf ("%08X: ", ofs);
+      cnt=16;
+//      if (cnt>len)
+//        cnt=len;
+
+      for (k=0;k<cnt;k++)
+        {	  
+          printf("%02X ", (unsigned long)(unsigned char)(buf[k]));
+          if ((k!=15) && ((k & 3)==3))
+            printf(" ");
+        }
+
+//      for (;k<16;k++)
+//        {
+//          printf("   ");
+//          if ((k!=15) && ((k & 3)==3))
+//            printf(" ");
+//        }
+
+      printf("; ");
+
+      for (k=0;k<cnt;k++)
+        printf("%c",(unsigned long)((((unsigned char)buf[k]>=32) && ((unsigned char)buf[k]!=127))?buf[k]:'.'));
+
+      printf("\n");
+
+      ofs+=16;
+      buf+=16;
+      len-=cnt;
+    }
+}
+
+static char *hexdump_buf = 0;
+
+extern int hexdump_func (char *arg/*, int flags*/);
+
+int
+hexdump_func (char *arg/*, int flags*/)
+{
+  char *p;
+  unsigned long long tmp = -1;
+  unsigned long len = 0x80;
+
+  if (arg && *arg)
+  {
+    p = arg;
+    if (! safe_parse_maxint (&p, &tmp))
+	return 0;
+    hexdump_buf = (char *)(int)tmp;
+    arg = skip_to (/*0, */arg);
+    if (*arg)
+    {
+        p = arg;
+        if (! safe_parse_maxint (&p, &tmp))
+		return 0;
+	len = tmp;
+    }
+  }
+
+  hexdump((unsigned long)hexdump_buf, hexdump_buf, len);
+  hexdump_buf += len;
+
+  return 1;
+}
+
+static struct builtin builtin_hexdump =
+{
+  "hexdump",
+  hexdump_func,
+};
+
 /* The table of builtin commands. Sorted in dictionary order.  */
 struct builtin *builtin_table[] =
 {
@@ -4557,6 +4641,7 @@ struct builtin *builtin_table[] =
   &builtin_default,
   &builtin_exit,
   &builtin_find,
+  &builtin_hexdump,
 #if 1 || defined(MBRSECTORS127)
   &builtin_map,
 #endif

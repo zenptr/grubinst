@@ -12105,7 +12105,7 @@ ENTRY(get_cmdline)
 
 	//pushl	%esi
 	pushl	%edi
-2:
+22:
 	movl	$-1, EXT_C(history)
 	movl	$(CMDLINE_BUF), %edi
 	movb	$0, (%edi)
@@ -12144,7 +12144,7 @@ ENTRY(get_cmdline)
 	cmpb	$0x0A, %al	# -- LF --
 	je	1f		# end the line
 	cmpb	$0x1B, %al	# -- ESC --
-	je	2b		# cancel all input, redo from start
+	je	22b		# cancel all input, redo from start
 //////////////////////////////////////////////////////////////////////////////
 	cmpb	$0x08, %al	# -- BackSpace --
 	jne	2f
@@ -12425,6 +12425,18 @@ ENTRY(get_cmdline)
 	jnz	8b
 	incl	EXT_C(history)
 	jmp	1b
+2:
+	cmpw	$0x5300, %ax	# Delete Key
+	jne	2f
+	cmpl	$(CMDLINE_BUF), %edi
+	jne	2f
+	pushl	$0x0D
+	call	ABS(EXT_C(console_putchar))
+	popl	%eax
+	pushl	$0
+	call	EXT_C(hexdump_func)
+	popl	%eax
+	jmp	22b		# get new command line
 2:
 	cmpb	$0, %al		# ctrl keys
 	jz	1b		# ignored

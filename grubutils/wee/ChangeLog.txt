@@ -1,4 +1,5 @@
 
+2011-05-18 added hexdump command. Its shortcut is Delete key leading the line.
 2011-05-09 (Roy)packed up a snippet of code to form read_dbr().
 2011-05-08 (Roy)supported Dell Real-Mode Kernel(DRMK) and ReactOS freeldr.
 2011-05-06 move fat_dir to asm.S.
