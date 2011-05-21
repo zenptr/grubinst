@@ -4599,7 +4599,7 @@ int
 hexdump_func (char *arg/*, int flags*/)
 {
   char *p;
-  unsigned long long tmp = -1;
+  unsigned long long tmp;
   unsigned long len = 0x80;
 
   if (arg && *arg)
@@ -4630,9 +4630,62 @@ static struct builtin builtin_hexdump =
   hexdump_func,
 };
 
+static char *asm_buf = (char *)0x1000000;	/* 16M */
+
+static int
+asm_func (char *arg/*, int flags*/)
+{
+  char *p;
+  char *go_buf = (char *)0x1000000;	/* 16M */
+  unsigned long long tmp;
+
+  if (arg && *arg)
+  {
+    p = arg;
+    if (safe_parse_maxint (&p, &tmp))
+    {
+	/* the pointer */
+	go_buf = asm_buf = (char *)(int)tmp;
+	arg = skip_to (/*0, */arg);
+    }
+    if (*arg)
+    {
+	unsigned long pseudo = *(unsigned long *)arg;
+
+	p = arg = skip_to (arg);
+	pseudo &= 0x00DFFFFF;
+	if (pseudo == 0x6264) /* db */
+	{
+		for (; *p; p = skip_to (p))
+		{
+			if (! safe_parse_maxint (&p, &tmp))
+				return 0;
+			*(asm_buf++) = tmp;
+		}
+	}
+	else if (pseudo == 0x6f67) /* go */
+	{
+		go_buf = ((char * (*)(void))go_buf)();
+		printf ("%08X\n", go_buf);
+	}
+    }
+  }
+  else
+	printf ("%08X\n", asm_buf);
+
+  return !(errnum = 0);
+}
+
+static struct builtin builtin_asm =
+{
+  "asm",
+  asm_func,
+};
+
 /* The table of builtin commands. Sorted in dictionary order.  */
 struct builtin *builtin_table[] =
 {
+  &builtin_asm,
 #if defined(MBRSECTORS127)
   &builtin_blocklist,
 #endif
