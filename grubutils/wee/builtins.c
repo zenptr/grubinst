@@ -4251,7 +4251,8 @@ find_func (char *arg/*, int flags*/)
 	{
 	  if (active)
 	  {
-		if (pi[i].part_num > 3)	/* not primary */
+		/* the first partition is 255, so we must exclude it. */
+		if ((char)(pi[i].part_num) > 3)	/* not primary */
 			break;
 		if (pi[i].boot_indicator != 0x80) /* not active */
 			continue;

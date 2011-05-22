@@ -1,4 +1,5 @@
 
+2011-05-22 (Roy)fix wee127 stage2_size issue. (tinybit)fix find --active issue.
 2011-05-21 added asm command and subcommands db/go to write/run machine code.
 2011-05-18 added hexdump command. Its shortcut is Delete key leading the line.
 2011-05-09 (Roy)packed up a snippet of code to form read_dbr().

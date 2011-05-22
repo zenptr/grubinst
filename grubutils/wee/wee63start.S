@@ -29,8 +29,12 @@
 #define ASM_FILE
 #include "shared.h"
 #define ASM_FILE
-	
+
+#if defined(MBRSECTORS127)
+#include "wee127/stage2_size.h"
+#else
 #include "stage2_size.h"
+#endif
 
 	.file	"wee63start.S"
 
