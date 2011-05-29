@@ -1046,6 +1046,7 @@ boot_grldr:
 	movb	$2, gdt_dst_hi1
 	call	load_file
 	call	setup_mbr
+	push	%dx
 	ljmp	$0x2000, $0
 
 1:
