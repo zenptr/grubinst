@@ -60,21 +60,6 @@ static unsigned long cur_drive = 0L;		//grub4dos drive num for FatFs Module
 static unsigned long cur_partition = 0L; 	//grub4dos partition num for FatFs Module
 static FATFS fs;
 
-unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the following comment. */
-/* gcc treat the following as data only if a global initialization like the
- * above line occurs.
- */
-
-//asm(".long 0x534F4434");
-
-/* a valid executable file for grub4dos must end with these 8 bytes */
-asm(ASM_BUILD_DATE);
-asm(".long 0x03051805");
-asm(".long 0xBCBAA7BA");
-
-/* thank goodness gcc will place the above 8 bytes at the end of the b.out
- * file. Do not insert any other asm lines here.
- */
 #ifdef DEBUG
 static char fat_err[][100]={
 	[FR_OK] = 0,
@@ -98,6 +83,21 @@ static char fat_err[][100]={
 	[FR_TOO_MANY_OPEN_FILES] = " (18) Number of open files > _FS_SHARE ",
 };
 #endif
+unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the following comment. */
+/* gcc treat the following as data only if a global initialization like the
+ * above line occurs.
+ */
+
+//asm(".long 0x534F4434");
+
+/* a valid executable file for grub4dos must end with these 8 bytes */
+asm(ASM_BUILD_DATE);
+asm(".long 0x03051805");
+asm(".long 0xBCBAA7BA");
+
+/* thank goodness gcc will place the above 8 bytes at the end of the b.out
+ * file. Do not insert any other asm lines here.
+ */
 int
 main (char *arg,int flags)
 {
