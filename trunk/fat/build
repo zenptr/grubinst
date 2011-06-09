@@ -10,7 +10,7 @@ ASMDATE=`date -u +".long "%Y%m%d`
 CC=${CC:-gcc}
 NOBUILDID=${NOBUILDID:-0}
 
-if [ "$NOBUILDID" == "0" ]; then
+if [ "$NOBUILDID" = "0" ]; then
 	BUILDID=-Wl,--build-id=none
 else
 	BUILDID=

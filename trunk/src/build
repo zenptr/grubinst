@@ -6,7 +6,7 @@ ASMDATE=`date -u +".long "%Y%m%d`
 CC=${CC:-gcc}
 NOBUILDID=${NOBUILDID:-0}
 
-if [ "$NOBUILDID" == "0" ]; then
+if [ "$NOBUILDID" = "0" ]; then
 	BUILDID=-Wl,--build-id=none
 else
 	BUILDID=
@@ -23,9 +23,9 @@ if [ ! -d ./zip ] ; then
 fi
 for file in *.c;do
 	OUT=./tmp/${file%*.c}.o
-        if [ "$1" == "clean" -o "$1" == "distclean" ]; then
+        if [ "$1" = "clean" -o "$1" = "distclean" ]; then
                 rm ./bin/${file%*.c}
-                if [ "$1" == "distclean" ]; then
+                if [ "$1" = "distclean" ]; then
                         rm $OUT
                         rm ./zip/${file%*.c}*.zip
                 fi
