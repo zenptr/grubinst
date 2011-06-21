@@ -121,7 +121,7 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   for (i = 0; i < 4; i++)
     {
       int *part_entry;
-      /* the boot indicator must be 0x80 (for bootable) or 0 (for non-bootable) */
+      /* the boot indicator must be 0x80 (bootable) or 0 (non-bootable) */
       if ((unsigned char)(BS->P[i].boot_indicator << 1))/* if neither 0x80 nor 0 */
       {
 	printf ("Error: invalid boot indicator(0x%X) for entry %d.\n", (unsigned char)(BS->P[i].boot_indicator), i);
@@ -269,7 +269,6 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
       /* Check if this combination of HPC and SPT is OK */
       for (i = 0; i < 8; i++)
       {
-        /* the boot indicator must be 0x80 (for bootable) or 0 (for non-bootable) */
 	if (L[i])
 	{
 	  unsigned long C1, H1, S1;
@@ -279,7 +278,9 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	  H1 = (((unsigned long)L[i]) / SPT) % HPC;
 	  C1 = ((unsigned long)L[i]) / (SPT * HPC);
 	  /* check sanity */
-	  if ((C1 <= 1023) ? (C1 == C[i] && H1 == H[i] && S1 == S[i]) :
+	  if ((C1 <= 1023) ?
+		((C1 == C[i] && H1 == H[i] && S1 == S[i]) || (C1 > C[i] && C[i] == Cmax && (H[i] == HPC - 1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) )
+		:
 		((((C1 & 1023) == C[i] || 1023 == C[i]) && (S1 == S[i] || SPT == S[i]) && (H1 == H[i] || (HPC - 1) == H[i])) || (1023 == C[i] && 255 == H[i] && 63 == S[i])))
 		continue; /* this is OK */
 	  /* failed, try next combination */
@@ -295,14 +296,21 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   }
   if (solutions == 0)
   {
-    printf ("Sorry! No solution. Bad! Please report it.\n");
-    ret_val = 12;
+    if ((Hmax == 254 || Hmax == 255) && Smax == 63)
+    {
+      printf ("Partition table is NOT GOOD and there is no solution.\nBut there is a fuzzy solution: H=255, S=63.\n");
+      ret_val = 0;	/* partition table probe success */
+    }
+    else
+    {
+      printf ("Sorry! No solution. Bad! Please report it.\n");
+      ret_val = 12;
+    }
   }
   else if (solutions == 1)
   {
     printf ("Perfectly Good!\n");
-    /* partition table probe success */
-    return 0;
+    return 0;	/* partition table probe success */
   }
   else
   {
@@ -313,7 +321,9 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   /* print the partition table in calculated decimal C H S LBA */
   for (i = 0; i < 4; i++)
   {
-    printf ("%4d %4d %4d %12d    %4d %4d %4d %12d\n", C[i], H[i], S[i], (unsigned long)L[i], C[i+4], H[i+4], S[i+4], (unsigned long)L[i+4]);
+    printf ("%3d %3d %3d %10ld            %3d %3d %3d %10ld\n"
+		, C[i], H[i], S[i], (unsigned long long)L[i]
+		, C[i+4], H[i+4], S[i+4], (unsigned long long)L[i+4]);
   }
 
 err_print:
