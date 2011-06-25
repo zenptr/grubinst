@@ -39,6 +39,7 @@ static unsigned long Y;
 static unsigned long Cmax;
 static unsigned long Hmax;
 static unsigned long Smax;
+static unsigned long Lmax;
 
 unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
@@ -110,7 +111,7 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   
   /* probe the partition table */
   
-  Cmax = 0; Hmax = 0; Smax = 0;
+  Cmax = 0; Hmax = 0; Smax = 0; Lmax = 0;
   if (filemax < 512)
   {
 	printf ("Error: filesize(=%d) less than 512.\n", (unsigned long)filemax);
@@ -204,6 +205,8 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	  L[i] = BS->P[i].start_lba;// - X + 1;
 	  if (start_sector1 == part_start1)/* extended partition is pretending to be a whole drive */
 		L[i] +=(unsigned long) part_start1;
+	  if (Lmax < L[i])
+	      Lmax = L[i];
 	
 	  /* the ending cylinder number */
 	  C[i+4] = (BS->P[i].end_sector_cylinder >> 8) | ((BS->P[i].end_sector_cylinder & 0xc0) << 2);
@@ -242,6 +245,8 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	  //L[i+4] -= Y;
 	  //L[i+4] ++;
 	  L[i+4] --;
+	  if (Lmax < L[i+4])
+	      Lmax = L[i+4];
       }
       else
       {
@@ -293,7 +298,7 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 		{
 			continue; /* this is OK */
 		}
-		if (/*C1 > C[i]*/ C1 == C[i]+1 && C[i] == Cmax && (((H[i] == HPC-1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) || (H[i] == H1 && S[i] == S1)))
+		if (/*C1 > C[i]*/ C1 == C[i]+1 && C[i] == Cmax && L[i] == Lmax && (H1 != HPC-1 || S1 != SPT) && (((H[i] == HPC-1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) || (H[i] == H1 && S[i] == S1)))
 		{
 			/* HP USB Disk Storage Format Tool. Bad!! */
 			bad_things++;
