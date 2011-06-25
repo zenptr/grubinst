@@ -81,9 +81,12 @@ main ()
 
 /* on call:
  * 		BS		points to the bootsector
- * 		start_sector1	is the start_sector of the bootimage in the real disk, if unsure, set it to 0
- * 		sector_count1	is the sector_count of the bootimage in the real disk, if unsure, set it to 1
- * 		part_start1	is the part_start of the partition in which the bootimage resides, if unsure, set it to 0
+ * 		start_sector1	is the start_sector of the bootimage in the
+ *				real disk, if unsure, set it to 0
+ * 		sector_count1	is the sector_count of the bootimage in the
+ *				real disk, if unsure, set it to 1
+ * 		part_start1	is the part_start of the partition in which
+ *				the bootimage resides, if unsure, set it to 0
  *  
  * on return:
  * 		0		success
@@ -101,6 +104,9 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   unsigned long solutions = 0;
   unsigned long ret_val;
   unsigned long active_partitions = 0;
+  unsigned long best_HPC = 0;
+  unsigned long best_SPT = 0;
+  unsigned long best_bad_things = 0xFFFFFFFF;
   
   /* probe the partition table */
   
@@ -190,7 +196,7 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	  ///* partitions should not start at the first track, the MBR-track */
 	  if (! X /* || BS->P[i].start_lba < Smax */)
 	  {
-		printf ("Error: starting S of partition %d should not be 0.\n", i);
+		printf ("Error: starting S of entry %d should not be 0.\n", i);
 		ret_val = 7;
 		goto err_print;
 	  }
@@ -213,7 +219,7 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	      Smax = Y;
 	  if (! Y)
 	  {
-		printf ("Error: ending S of partition %d should not be 0.\n", i);
+		printf ("Error: ending S of entry %d should not be 0.\n", i);
 		ret_val = 8;
 		goto err_print;
 	  }
@@ -266,6 +272,8 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   {
     for (HPC = (Hmax == 255) ? Hmax : Hmax + 1; HPC <= 256; HPC++)
     {
+      unsigned long bad_things = 0;
+
       /* Check if this combination of HPC and SPT is OK */
       for (i = 0; i < 8; i++)
       {
@@ -278,11 +286,32 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	  H1 = (((unsigned long)L[i]) / SPT) % HPC;
 	  C1 = ((unsigned long)L[i]) / (SPT * HPC);
 	  /* check sanity */
+#if 1
+	  if (C1 <= 1023)
+	  {
+		if (C1 == C[i] && H1 == H[i] && S1 == S[i])
+		{
+			continue; /* this is OK */
+		}
+		if (/*C1 > C[i]*/ C1 == C[i]+1 && C[i] == Cmax && (((H[i] == HPC-1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) || (H[i] == H1 && S[i] == S1)))
+		{
+			/* HP USB Disk Storage Format Tool. Bad!! */
+			bad_things++;
+			continue; /* accept it. */
+		}
+	  }
+	  else
+	  {
+		if ((((C1 & 1023) == C[i] || 1023 == C[i]) && (S1 == S[i] || SPT == S[i]) && (H1 == H[i] || (HPC-1) == H[i])) || (1023 == C[i] && 255 == H[i] && 63 == S[i]))
+		continue; /* this is OK */
+	  }
+#else
 	  if ((C1 <= 1023) ?
 		((C1 == C[i] && H1 == H[i] && S1 == S[i]) || (/*C1 > C[i]*/ C1 == C[i]+1 && C[i] == Cmax && (((H[i] == HPC-1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) || (H[i] == H1 && S[i] == S1))) )
 		:
 		((((C1 & 1023) == C[i] || 1023 == C[i]) && (S1 == S[i] || SPT == S[i]) && (H1 == H[i] || (HPC-1) == H[i])) || (1023 == C[i] && 255 == H[i] && 63 == S[i])))
 		continue; /* this is OK */
+#endif
 	  /* failed, try next combination */
 	  break;
 	}
@@ -290,7 +319,15 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
       if (i >= 8) /* passed */
       {
 	solutions++;
-	printf ("Solution %d: H=%d, S=%d.\n", solutions, HPC, SPT);
+	if (HPC == 256)
+		bad_things += 16;	/* not a good solution. */
+	printf ("Solution %d(bad_things=%d): H=%d, S=%d.\n", solutions, bad_things, HPC, SPT);
+	if (bad_things <= best_bad_things)
+	{
+		best_HPC = HPC;
+		best_SPT = SPT;
+		best_bad_things = bad_things;
+	}
       }
     }
   }
@@ -298,7 +335,8 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   {
     if ((Hmax == 254 || Hmax == 255) && Smax == 63)
     {
-      printf ("Partition table is NOT GOOD and there is no solution.\nBut there is a fuzzy solution: H=255, S=63.\n");
+      printf ("Partition table is NOT GOOD and there is no solution.\n"
+	      "But there is a fuzzy solution: H=255, S=63.\n");
       ret_val = 0;	/* partition table probe success */
     }
     else
@@ -309,21 +347,39 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
   }
   else if (solutions == 1)
   {
-    printf ("Perfectly Good!\n");
-    return 0;	/* partition table probe success */
+    if (best_bad_things == 0)
+    {
+	printf ("Perfectly Good!\n");
+	return 0;	/* partition table probe success */
+    }
+    else
+    {
+      printf ("Found 1 solution, but the partition table has problems.\n");
+      ret_val = 0;	/* partition table probe success */
+    }
   }
   else
   {
-    printf ("Total solutions: %d (too many). Not good! Please report it.\n", solutions);
+    if (best_bad_things == 0)
+    {
+	printf ("Total solutions: %d (too many). Found a good one:\n"
+		, solutions);
+    }
+    else
+    {
+	printf ("Total solutions: %d (too many). The best one is:\n"
+		, solutions);
+    }
+    printf ("H=%d, S=%d.\n", best_HPC, best_SPT);
     ret_val = 13;
   }
 
-  /* print the partition table in calculated decimal C H S LBA */
+  /* print the partition table in calculated decimal LBA C H S */
   for (i = 0; i < 4; i++)
   {
-    printf ("%3d %3d %3d %10ld            %3d %3d %3d %10ld\n"
-		, C[i], H[i], S[i], (unsigned long long)L[i]
-		, C[i+4], H[i+4], S[i+4], (unsigned long long)L[i+4]);
+    printf ("%10ld %4d %3d %2d    %10ld %4d %3d %2d\n"
+		, (unsigned long long)L[i], C[i], H[i], S[i]
+		, (unsigned long long)L[i+4], C[i+4], H[i+4], S[i+4]);
   }
 
 err_print:
