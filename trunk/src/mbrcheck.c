@@ -279,9 +279,9 @@ mbrcheck (struct master_and_dos_boot_sector *BS, unsigned long start_sector1, un
 	  C1 = ((unsigned long)L[i]) / (SPT * HPC);
 	  /* check sanity */
 	  if ((C1 <= 1023) ?
-		((C1 == C[i] && H1 == H[i] && S1 == S[i]) || (C1 > C[i] && C[i] == Cmax && (H[i] == HPC - 1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) )
+		((C1 == C[i] && H1 == H[i] && S1 == S[i]) || (/*C1 > C[i]*/ C1 == C[i]+1 && C[i] == Cmax && (((H[i] == HPC-1 || (HPC == 255 && H[i] == 255)) && S[i] == SPT) || (H[i] == H1 && S[i] == S1))) )
 		:
-		((((C1 & 1023) == C[i] || 1023 == C[i]) && (S1 == S[i] || SPT == S[i]) && (H1 == H[i] || (HPC - 1) == H[i])) || (1023 == C[i] && 255 == H[i] && 63 == S[i])))
+		((((C1 & 1023) == C[i] || 1023 == C[i]) && (S1 == S[i] || SPT == S[i]) && (H1 == H[i] || (HPC-1) == H[i])) || (1023 == C[i] && 255 == H[i] && 63 == S[i])))
 		continue; /* this is OK */
 	  /* failed, try next combination */
 	  break;
