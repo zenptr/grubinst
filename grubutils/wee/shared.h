@@ -553,7 +553,7 @@ int grub_open (char *filename);
 
 /* Read LEN bytes into BUF from the file that was opened with
    GRUB_OPEN.  If LEN is -1, read all the remaining data in the file.  */
-unsigned long grub_read (unsigned long long buf, unsigned long long len, unsigned long write);
+unsigned long long grub_read (unsigned long long buf, unsigned long long len, unsigned long write);
 
 /* Display statistics on the current active device. */
 void print_fsys_type (void);

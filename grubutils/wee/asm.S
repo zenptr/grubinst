@@ -273,6 +273,15 @@ VARIABLE(current_slice)
 
 	. = EXT_C(main) + 0x140
 
+VARIABLE(buf_track)
+	.long	-1
+	.long	-1	/* buf_track is 64-bit */
+VARIABLE(buf_drive)
+	.long	-1
+	.long	0	/* padding */
+
+	. = EXT_C(main) + 0x150
+
 real_codestart:
 	cli
 	cld
@@ -12771,7 +12780,7 @@ VARIABLE(system_functions)
 	.long	ABS(EXT_C(install_partition))	// getxy
 	.long	ABS(EXT_C(install_partition))	// gotoxy
 	.long	ABS(EXT_C(install_partition))	// cls
-	.long	ABS(EXT_C(install_partition))	// setcursor, obsolete
+	.long	EXT_C(skip_to)	//wee_skip_to, here was the obsolete setcursor
 	.long	EXT_C(nul_terminate)
 	.long	EXT_C(safe_parse_maxint) // safe_parse_maxint_with_suffix!
 	.long	EXT_C(substring)

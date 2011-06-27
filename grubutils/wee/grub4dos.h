@@ -1,98 +1,104 @@
 /*
  * The C code for a grub4dos executable may have defines as follows:
- * 
- */
-
-#ifndef GRUB4DOS_2010_07_01
-#define GRUB4DOS_2010_07_01
+ * 用于编写外部命令的函数定义。
+*/
+#ifndef GRUB4DOS_2010_12_15
+#define GRUB4DOS_2010_12_15
 #undef NULL
 #define NULL         ((void *) 0)
 
-/* Error codes */
-#define ERR_NONE			0
-#define ERR_BAD_FILENAME		1
-#define ERR_BAD_FILETYPE		2
-#define ERR_BAD_GZIP_DATA		3
-#define ERR_BAD_GZIP_HEADER		4
-#define ERR_BAD_PART_TABLE		5
-#define ERR_BAD_VERSION			6
-#define ERR_BELOW_1MB			7
-#define ERR_BOOT_COMMAND		8
-#define ERR_BOOT_FAILURE		9
-#define ERR_BOOT_FEATURES		10
-#define ERR_DEV_FORMAT			11
-#define ERR_DEV_VALUES			12
-#define ERR_EXEC_FORMAT			13
-#define ERR_FILELENGTH			14
-#define ERR_FILE_NOT_FOUND		15
-#define ERR_FSYS_CORRUPT		16
-#define ERR_FSYS_MOUNT			17
-#define ERR_GEOM			18
-#define ERR_NEED_LX_KERNEL		19
-#define ERR_NEED_MB_KERNEL		20
-#define ERR_NO_DISK			21
-#define ERR_NO_PART			22
-#define ERR_NUMBER_PARSING		23
-#define ERR_OUTSIDE_PART		24
-#define ERR_READ			25
-#define ERR_SYMLINK_LOOP		26
-#define ERR_UNRECOGNIZED		27
-#define ERR_WONT_FIT			28
-#define ERR_WRITE			29
-#define ERR_BAD_ARGUMENT		30
-#define ERR_UNALIGNED			31
-#define ERR_PRIVILEGED			32
-#define ERR_DEV_NEED_INIT		33
-#define ERR_NO_DISK_SPACE		34
-#define ERR_NUMBER_OVERFLOW		35
+/* Error codes (descriptions are in common.c) */
+typedef enum
+{
+  ERR_NONE = 0,
+  ERR_BAD_FILENAME,
+  ERR_BAD_FILETYPE,
+  ERR_BAD_GZIP_DATA,
+  ERR_BAD_GZIP_HEADER,
+  ERR_BAD_PART_TABLE,
+  ERR_BAD_VERSION,
+  ERR_BELOW_1MB,
+  ERR_BOOT_COMMAND,
+  ERR_BOOT_FAILURE,
+  ERR_BOOT_FEATURES,
+  ERR_DEV_FORMAT,
+  ERR_DEV_VALUES,
+  ERR_EXEC_FORMAT,
+  ERR_FILELENGTH,
+  ERR_FILE_NOT_FOUND,
+  ERR_FSYS_CORRUPT,
+  ERR_FSYS_MOUNT,
+  ERR_GEOM,
+  ERR_NEED_LX_KERNEL,
+  ERR_NEED_MB_KERNEL,
+  ERR_NO_DISK,
+  ERR_NO_PART,
+  ERR_NUMBER_PARSING,
+  ERR_OUTSIDE_PART,
+  ERR_READ,
+  ERR_SYMLINK_LOOP,
+  ERR_UNRECOGNIZED,
+  ERR_WONT_FIT,
+  ERR_WRITE,
+  ERR_BAD_ARGUMENT,
+  ERR_UNALIGNED,
+  ERR_PRIVILEGED,
+  ERR_DEV_NEED_INIT,
+  ERR_NO_DISK_SPACE,
+  ERR_NUMBER_OVERFLOW,
 
-#define ERR_DEFAULT_FILE		36
-#define ERR_DEL_MEM_DRIVE		37
-#define ERR_DISABLE_A20			38
-#define ERR_DOS_BACKUP			39
-#define ERR_ENABLE_A20			40
-#define ERR_EXTENDED_PARTITION		41
-#define ERR_FILENAME_FORMAT		42
-#define ERR_HD_VOL_START_0		43
-#define ERR_INT13_ON_HOOK		44
-#define ERR_INT13_OFF_HOOK		45
-#define ERR_INVALID_BOOT_CS		46
-#define ERR_INVALID_BOOT_IP		47
-#define ERR_INVALID_FLOPPIES		48
-#define ERR_INVALID_HARDDRIVES		49
-#define ERR_INVALID_HEADS		50
-#define ERR_INVALID_LOAD_LENGTH		51
-#define ERR_INVALID_LOAD_OFFSET		52
-#define ERR_INVALID_LOAD_SEGMENT	53
-#define ERR_INVALID_SECTORS		54
-#define ERR_INVALID_SKIP_LENGTH		55
-#define ERR_INVALID_RAM_DRIVE		56
-#define ERR_IN_SITU_FLOPPY		57
-#define ERR_IN_SITU_MEM			58
-#define ERR_MD_BASE			59
-#define ERR_NON_CONTIGUOUS		60
-#define ERR_NO_DRIVE_MAPPED		61
-#define ERR_NO_HEADS			62
-#define ERR_NO_SECTORS			63
-#define ERR_PARTITION_TABLE_FULL	64
-#define ERR_RD_BASE			65
-#define ERR_SPECIFY_GEOM		66
-#define ERR_SPECIFY_MEM			67
-#define ERR_SPECIFY_RESTRICTION		68
-#define ERR_MD5_FORMAT			69
-#define ERR_WRITE_GZIP_FILE		70
-#define ERR_FUNC_CALL			71
-#define ERR_INTERNAL_CHECK		72
-#define ERR_KERNEL_WITH_PROGRAM		73
-#define ERR_HALT			74
+  ERR_DEFAULT_FILE,
+  ERR_DEL_MEM_DRIVE,
+  ERR_DISABLE_A20,
+  ERR_DOS_BACKUP,
+  ERR_ENABLE_A20,
+  ERR_EXTENDED_PARTITION,
+  ERR_FILENAME_FORMAT,
+  ERR_HD_VOL_START_0,
+  ERR_INT13_ON_HOOK,
+  ERR_INT13_OFF_HOOK,
+  ERR_INVALID_BOOT_CS,
+  ERR_INVALID_BOOT_IP,
+  ERR_INVALID_FLOPPIES,
+  ERR_INVALID_HARDDRIVES,
+  ERR_INVALID_HEADS,
+  ERR_INVALID_LOAD_LENGTH,
+  ERR_INVALID_LOAD_OFFSET,
+  ERR_INVALID_LOAD_SEGMENT,
+  ERR_INVALID_SECTORS,
+  ERR_INVALID_SKIP_LENGTH,
+  ERR_INVALID_RAM_DRIVE,
+  ERR_IN_SITU_FLOPPY,
+  ERR_IN_SITU_MEM,
+  ERR_MD_BASE,
+  ERR_NON_CONTIGUOUS,
+  ERR_NO_DRIVE_MAPPED,
+  ERR_NO_HEADS,
+  ERR_NO_SECTORS,
+  ERR_PARTITION_TABLE_FULL,
+  ERR_RD_BASE,
+  ERR_SPECIFY_GEOM,
+  ERR_SPECIFY_MEM,
+  ERR_SPECIFY_RESTRICTION,
+//  ERR_INVALID_RD_BASE,
+//  ERR_INVALID_RD_SIZE,
+  ERR_MD5_FORMAT,
+  ERR_WRITE_GZIP_FILE,
+  ERR_FUNC_CALL,
+//  ERR_WRITE_TO_NON_MEM_DRIVE,
+  ERR_INTERNAL_CHECK,
+  ERR_KERNEL_WITH_PROGRAM,
+  ERR_HALT,
+  ERR_PARTITION_LOOP,
+  ERR_NOT_ENOUGH_MEMORY,
+  ERR_BAT_GOTO,
+  ERR_BAT_CALL,
 
-/* MAX_ERR_NUM should not be defined. */
-//#define MAX_ERR_NUM			75
+  MAX_ERR_NUM
+} grub_error_t;
 
-typedef unsigned long grub_error_t;
-
-#define install_partition (*(unsigned long *)0x8208)
-#define boot_drive (*(unsigned long *)0x8280)
+#define install_partition (*(unsigned long long *)0x8208)
+#define boot_drive (*(unsigned long long *)0x8280)
 #define pxe_yip (*(unsigned long *)0x8284)
 #define pxe_sip (*(unsigned long *)0x8288)
 #define pxe_gip (*(unsigned long *)0x828C)
@@ -122,8 +128,6 @@ typedef unsigned long grub_error_t;
 #define next_partition_ext_offset	((*(unsigned long ***)0x8304)[8])
 #define next_partition_buf		((*(char ***)0x8304)[9])
 #define quit_print		((*(int **)0x8304)[10])
-//#define buf_drive	((*(int **)0x8304)[11])
-//#define buf_track	((*(int **)0x8304)[12])
 #define filesystem_type ((*(int **)0x8304)[13])
 //#define query_block_entries ((*(long **)0x8304)[14])
 //#define map_start_sector ((*(unsigned long **)0x8304)[15])
@@ -146,30 +150,7 @@ typedef unsigned long grub_error_t;
 #define cursorX (*(short *)(VARIABLE_GRAPHICS))
 #define cursorY (*(short *)(VARIABLE_GRAPHICS + 2))
 #define cursorBuf ((char *)(VARIABLE_GRAPHICS + 6))
-/*
-#define disable_map_info ((*(int **)0x8304)[22])
-#define atapi_dev_count (*(int13_handler + 2))
-#define min_cdrom_id (*(int13_handler + 3))
-#define floppies_orig (*(int13_handler + 0x0A))
-#define harddrives_orig (*(int13_handler + 0x0B))
-#define hooked_drive_map ((struct drive_map_slot *)(int13_handler + 0x20))
-#define safe_mbr_hook (*(unsigned long *)(int13_handler + 0x117))
-#define int13_scheme (*(unsigned long *)(int13_handler + 0x11B))
 
-#define bios_drive_map ((*(struct drive_map_slot ***)0x8304)[23])
-#define int13_handler ((char *)(*(int ***)0x8304)[24])
-#define memdisk_raw (*(*(unsigned long ***)0x8304)[25])
-#define a20_keep_on (*(*(unsigned long ***)0x8304)[26])
-#define lba_cd_boot (*(*(unsigned long ***)0x8304)[27])
-#define rawread_ignore_memmove_overflow ((*(int **)0x8304)[28])
-#define probed_total_sectors ((*(unsigned long **)0x8304)[29])
-#define probed_total_sectors_round ((*(unsigned long **)0x8304)[30])
-#define probed_heads ((*(unsigned long **)0x8304)[31])
-#define probed_sectors_per_track ((*(unsigned long **)0x8304)[32])
-#define probed_cylinders ((*(unsigned long **)0x8304)[33])
-#define sectors_per_cylinder ((*(unsigned long **)0x8304)[34])
-#define compressed_file ((*(int **)0x8304)[35])
-*/
 #define free_mem_start (*(unsigned long *)0x82F0)
 #define free_mem_end (*(unsigned long *)0x82F4)
 #define saved_mmap_addr (*(unsigned long *)0x82F8)
@@ -192,6 +173,8 @@ typedef unsigned long grub_error_t;
 #define filepos (*(unsigned long long *)0x8328)
 #define debug (*(int *)0x8330)
 #define current_slice (*(unsigned long *)0x8334)
+#define buf_track	(*(unsigned long long *)0x8340)
+#define buf_drive	(*(int *)0x8348)
 
 #define GRUB_READ 0xedde0d90
 #define GRUB_WRITE 0x900ddeed
@@ -204,7 +187,7 @@ typedef unsigned long grub_error_t;
 #define getxy ((int (*)(void))((*(int **)0x8300)[4]))
 #define gotoxy ((void (*)(int, int))((*(int **)0x8300)[5]))
 #define cls ((void (*)(void))((*(int **)0x8300)[6]))
-#define setcursor ((int (*)(int))((*(int **)0x8300)[7]))
+#define wee_skip_to ((char *(*)(char *, int))((*(int **)0x8300)[7]))
 #define nul_terminate ((int (*)(char *))((*(int **)0x8300)[8]))
 #define safe_parse_maxint_with_suffix ((int (*)(char **str_ptr, unsigned long long *myint_ptr, int unitshift))((*(int **)0x8300)[9]))
 #define safe_parse_maxint(str_ptr, myint_ptr) safe_parse_maxint_with_suffix(str_ptr, myint_ptr, 0)
@@ -215,55 +198,62 @@ typedef unsigned long grub_error_t;
 #define strncat ((int (*)(char *s1, const char *s2, int n))((*(int **)0x8300)[14]))
 #define strcmp ((int (*)(const char *s1, const char *s2))((*(int **)0x8300)[15]))
 #define strcpy ((char *(*)(char *dest, const char *src))((*(int **)0x8300)[16]))
-#define tolower ((int (*)(int))((*(int **)0x8300)[17]))
-#define isspace ((int (*)(int))((*(int **)0x8300)[18]))
 #define getkey ((int (*)(void))((*(int **)0x8300)[19]))
 #define checkkey ((int (*)(void))((*(int **)0x8300)[20]))
-#define sleep ((unsigned int (*)(unsigned int))((*(int **)0x8300)[21]))
 #define memcmp ((int (*)(const char *s1, const char *s2, int n))((*(int **)0x8300)[22]))
 #define memmove ((void *(*)(void *to, const void *from, int len))((*(int **)0x8300)[23]))
 #define memset ((void *(*)(void *start, int c, int len))((*(int **)0x8300)[24]))
-#define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[25]))
 #define open ((int (*)(char *))((*(int **)0x8300)[26]))
 #define read ((unsigned long long (*)(unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[27]))
 #define close ((void (*)(void))((*(int **)0x8300)[28]))
-#define unicode_to_utf8 ((unsigned long (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[29]))
-/*
-int
-rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
-*/
-#define rawread ((int (*)(unsigned long, unsigned long long, unsigned long, unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[30]))
-/*
-int
-rawwrite (unsigned long drive, unsigned long sector, char *buf)
-*/
-#define rawwrite ((int (*)(unsigned long, unsigned long, char *))((*(int **)0x8300)[31]))
-/*
-int
-devread (unsigned long long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
-*/
 #define devread ((int (*)(unsigned long long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write))((*(int **)0x8300)[32]))
 /*
  * int
  * devwrite (unsigned long sector, unsigned long sector_count, char *buf)
  */
 #define devwrite ((int (*)(unsigned long, unsigned long, char *))((*(int **)0x8300)[33]))
-#define list_partitions ((int (*)(void))((*(int **)0x8300)[34]))
+#define next_partition ((int (*)(void))((*(int **)0x8300)[34]))
 #define open_device ((int (*)(void))((*(int **)0x8300)[35]))
 #define real_open_partition ((int (*)(int))((*(int **)0x8300)[36]))
 #define set_device ((char *(*)(char *))((*(int **)0x8300)[37]))
-//#define dir ((int (*)(char *))((*(int **)0x8300)[38]))
-#define print_a_completion ((void (*)(char *))((*(int **)0x8300)[39]))
-#define print_completions ((int (*)(int, int))((*(int **)0x8300)[40]))
 #define parse_string ((int (*)(char *))((*(int **)0x8300)[41]))
 #define hexdump ((void (*)(unsigned long, char *, int))((*(int **)0x8300)[42]))
 #define skip_to ((char *(*)(int after_equal, char *cmdline))((*(int **)0x8300)[43]))
 #define builtin_cmd ((int (*)(char *cmd, char *arg, int flags))((*(int **)0x8300)[44]))
 #define get_datetime ((void (*)(unsigned long *date, unsigned long *time))((*(int **)0x8300)[45]))
-#define lba_to_chs ((void (*)(unsigned long lba, unsigned long *cl, unsigned long *ch, unsigned long *dh))((*(int **)0x8300)[46]))
-#define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[47]))
-#define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[48]))
-#define graphics_get_font ((unsigned char *(*)(void))((*(int **)0x8300)[51]))
+#define get_mmap_entry ((int (*)(char *,int))((*(int **)0x8300)[49]))
+#define malloc ((void *(*)(int size))((*(int **)0x8300)[50]))
+#define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
+#define realmode_run ((int (*)(long regs_ptr))((*(int **)0x8300)[53]))
+
+
+/*
+int
+devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
+*/
+#define grub_dir ((int (*)(char *))((*(int **)0x8300)[61]))
+#define print_a_completion ((void (*)(char *, int))((*(int **)0x8300)[62]))
+#define print_completions ((int (*)(int, int))((*(int **)0x8300)[63]))
+#define lba_to_chs ((void (*)(unsigned long lba, unsigned long *cl, unsigned long *ch, unsigned long *dh))((*(int **)0x8300)[64]))
+#define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[65]))
+#define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[66]))
+#define unicode_to_utf8 ((unsigned long (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[67]))
+/*
+int
+rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offset, unsigned long byte_len, unsigned long long buf, unsigned long write)
+*/
+#define rawread ((int (*)(unsigned long, unsigned long long, unsigned long, unsigned long long, unsigned long long, unsigned long))((*(int **)0x8300)[68]))
+/*
+int
+rawwrite (unsigned long drive, unsigned long sector, char *buf)
+*/
+#define rawwrite ((int (*)(unsigned long, unsigned long, char *))((*(int **)0x8300)[69]))
+
+#define setcursor ((int (*)(int))((*(int **)0x8300)[70]))
+#define tolower ((int (*)(int))((*(int **)0x8300)[71]))
+#define isspace ((int (*)(int))((*(int **)0x8300)[72]))
+#define sleep ((unsigned int (*)(unsigned int))((*(int **)0x8300)[73]))
+#define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[74]))
 
 
 #define RAW_ADDR(x) (x)
@@ -428,6 +418,7 @@ struct term_entry
   const char *name;
   /* The feature flags defined above.  */
   unsigned long flags;
+  unsigned short chars_per_line;
   /* Default for maximum number of lines if not specified */
   unsigned short max_lines;
   /* Put a character.  */
@@ -455,4 +446,5 @@ struct term_entry
   /* function to use to shutdown a terminal */
   void (*SHUTDOWN) (void);
 };
+
 #endif
