@@ -173,8 +173,8 @@ typedef enum
 #define filepos (*(unsigned long long *)0x8328)
 #define debug (*(int *)0x8330)
 #define current_slice (*(unsigned long *)0x8334)
-#define buf_drive	(*(int *)0x8340)
-#define buf_track	(*(int *)0x8348)
+#define buf_track	(*(unsigned long long *)0x8340)
+#define buf_drive	(*(int *)0x8348)
 
 #define GRUB_READ 0xedde0d90
 #define GRUB_WRITE 0x900ddeed
@@ -187,6 +187,7 @@ typedef enum
 #define getxy ((int (*)(void))((*(int **)0x8300)[4]))
 #define gotoxy ((void (*)(int, int))((*(int **)0x8300)[5]))
 #define cls ((void (*)(void))((*(int **)0x8300)[6]))
+#define wee_skip_to ((char *(*)(char *, int))((*(int **)0x8300)[7]))
 #define nul_terminate ((int (*)(char *))((*(int **)0x8300)[8]))
 #define safe_parse_maxint_with_suffix ((int (*)(char **str_ptr, unsigned long long *myint_ptr, int unitshift))((*(int **)0x8300)[9]))
 #define safe_parse_maxint(str_ptr, myint_ptr) safe_parse_maxint_with_suffix(str_ptr, myint_ptr, 0)
@@ -231,12 +232,12 @@ int
 devread (unsigned long drive, unsigned long sector, unsigned long byte_offset, unsigned long long byte_len, unsigned long long buf, unsigned long write)
 */
 #define grub_dir ((int (*)(char *))((*(int **)0x8300)[61]))
-#define print_a_completion ((void (*)(char *))((*(int **)0x8300)[62]))
+#define print_a_completion ((void (*)(char *, int))((*(int **)0x8300)[62]))
 #define print_completions ((int (*)(int, int))((*(int **)0x8300)[63]))
 #define lba_to_chs ((void (*)(unsigned long lba, unsigned long *cl, unsigned long *ch, unsigned long *dh))((*(int **)0x8300)[64]))
 #define probe_bpb ((int (*)(struct master_and_dos_boot_sector *BS))((*(int **)0x8300)[65]))
 #define probe_mbr ((int (*)(struct master_and_dos_boot_sector *BS, unsigned long start_sector1, unsigned long sector_count1, unsigned long part_start1))((*(int **)0x8300)[66]))
-#define unicode_to_utf8 ((void (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[67]))
+#define unicode_to_utf8 ((unsigned long (*)(unsigned short *, unsigned char *, unsigned long))((*(int **)0x8300)[67]))
 /*
 int
 rawread (unsigned long drive, unsigned long long sector, unsigned long byte_offset, unsigned long byte_len, unsigned long long buf, unsigned long write)
