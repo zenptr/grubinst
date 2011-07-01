@@ -321,7 +321,7 @@ int chkpci(struct pci_dev *end)
 	struct pci_dev dev;
 	p1 = P = skip_to(0x100 | ';',FILE_BUF);//跳过第一行。!
 	/*输出文件头部份*/
-	while (*P != '$')
+	while (P && *P != '$')
 	{
 		p1 = skip_to(0x100 | ';',P);
 		printf("%s\n",P);
