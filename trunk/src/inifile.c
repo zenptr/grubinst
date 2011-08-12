@@ -49,7 +49,7 @@ int main (char *arg,int flags)
 		if (substring(item,"/remove",1) == 0)
 		{
 			filepos = section - file_buf;
-			ret = read((unsigned long long)(unsigned int)"[;",2,GRUB_WRITE);
+			ret = read((unsigned long long)(unsigned int)"[*",2,GRUB_WRITE);
 		}
 		else
 		{

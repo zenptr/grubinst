@@ -195,9 +195,10 @@ int help(void)
 {
 return printf("\n CHKPCI For GRUB4DOS,Compiled time: %s %s\n\
 \n CHKPCI is a utility that can be used to scan PCI buses and report information about the PCI device.\n\
-\n CHKPCI [-h] [-o] [-cc:CC] [FILE]\n\
+\n CHKPCI [-h] [-o] [-u] [-cc:CC] [FILE]\n\
 \n Options:\n\
 \n -h      show this info.\n\
+\n -h      Unique.\n\
 \n -cc:CC  scan Class Codes with CC only.\n\
 \n FILE    PCI device database file.\n\
 \n For more information.Please visit web-site at http://chenall.net/tag/grub4dos\n\
@@ -313,7 +314,9 @@ int show_dev(struct pci_dev *pci)
 #define VEN 0x5F4E4556
 #define DEV 0X5F564544
 #define SUB 0x53425553
-int chkpci(struct pci_dev *end)
+char *find_pci(char *hwIDs, int flags);
+
+int chkpci(void)
 {
 	struct pci_dev *pci;
 	char *p1,*p2,*P;
@@ -333,6 +336,7 @@ int chkpci(struct pci_dev *end)
 		p1 = skip_to (0x100 | ';', P);
 		if (*P != '$')
 			continue;
+#if 0
 		if (*(unsigned long *)(P+1) & 0XFFDFDFDF != 0x5C494350) //PCI
 			continue;
 		if (*(unsigned long *)(P+5) & 0xFFDFDFDF != VEN)//check VEN_
@@ -373,34 +377,27 @@ int chkpci(struct pci_dev *end)
 			t = asctohex(P);
 			dev.revID = (char)t;
 		}
+#endif
 
-		for (pci=PCI;pci < end; pci++)
+		if (find_pci(P+1,0))
 		{
-			if (pci->venID == dev.venID && pci->devID == dev.devID)
+			if (out_fmt)
 			{
-				if (dev.subsys && dev.subsys != pci->subsys) continue;
-				if (dev.class && dev.class != pci->class) continue;
-				if (dev.revID && dev.revID != pci->revID) continue;
-				pci->venID = 0;
-				if (out_fmt)
+				printf("%s\n",P+1);
+			}
+			else
+			{
+				while (*p1 == '$')
 				{
+					p1 = skip_to (0x100 | ';',p1);
+				}
+				while (p1 && *p1 != '$')
+				{
+					p2 = p1;
+					p1 = skip_to (0x100 | ';',p1);
 					printf("%s\n",p2);
 				}
-				else
-				{
-					while (*p1 == '$')
-					{
-						p1 = skip_to (0x100 | ';',p1);
-					}
-					while (p1 && *p1 != '$')
-					{
-						p2 = p1;
-						p1 = skip_to (0x100 | ';',p1);
-						printf("%s\n",p2);
-					}
-					//输出内容直到文件尾或下一个以$开始的行。
-				}
-				break;
+				//输出内容直到文件尾或下一个以$开始的行。
 			}
 		}
 	}
@@ -416,7 +413,8 @@ int chkpci_func(char *arg,int flags)
 	char sc[6] = "\xff\xff\xff\xff\xff";
 	char cc[6] = "\xff\xff\xff\xff\xff";
 	struct pci_dev *devs = PCI;
-	int i;
+	int i,db_type=0;
+	int sort = 0;
 	if (! pcibios_init(0)) return 0;
 	while (*arg)
 	{
@@ -471,6 +469,10 @@ int chkpci_func(char *arg,int flags)
 			*(int *)cc = 0xFFFFFF03;
 			*(int *)sc = 0XFFFFFFFF;
 		}
+		else if (memcmp(arg,"-u",2) == 0)
+		{
+			sort = 1;
+		}
 		else
 			break;
 		arg = skip_to(0,arg);
@@ -488,15 +490,20 @@ int chkpci_func(char *arg,int flags)
 		if (! read ((unsigned long long)(int)FILE_BUF,-1,GRUB_READ))
 			return 0;
 		FILE_BUF[filemax] = 0;
-		if (*(unsigned long *)FILE_BUF != 0X24494350)  //检测文件头是否PCI$
+		if (*(unsigned long *)FILE_BUF == 0X24494350)  //检测文件头是否PCI$
+			db_type = 2;
+		else if (substring("[DriverPack]",FILE_BUF,1) == -1)
+			db_type = 3;
+		else
 		{
+			db_type = 1;
 			read_cfg(filemax);
 		}
 	}
 
 	int check = (cc[0] == '\xff')?0x100:1;
 
-	for (regVal = 0x80000000;regVal < 0x8005FF00;regVal += 0x100)
+	for (regVal = 0x80000000;regVal < 0x8010FF00;regVal += 0x100)
 	{
 		outl(0xCF8,regVal);
 		ret = inl(0xCFC);
@@ -561,12 +568,6 @@ int chkpci_func(char *arg,int flags)
 		{//读取SUBSYS信息,低16位是PCI_SUBSYSTEM_ID,高16位是PCI_SUBSYSTEM_VENDOR_ID(也叫OEM信息)
 			outl(0xcf8,regVal | 0x2c);
 			devs->subsys = inl(0xcfc);
-			if (*(unsigned long *)FILE_BUF != 0X24494350)
-			{
-				printf("PCI\\VEN_%04X&DEV_%04X&SUBSYS_%08X&CC_%04X%02X&REV_%02X\n",
-					devs->venID,devs->devID,devs->subsys,devs->class,devs->prog,devs->revID);
-				if (*arg) show_dev(devs);
-			}
 			devs++;
 		}
 
@@ -574,6 +575,195 @@ int chkpci_func(char *arg,int flags)
 		/*如果是单功能设备,检测下一设备*/
 		if ( (regVal & 0x700) == 0 && (ret & 0x80) == 0) regVal += 0x700;
 	}
-	if (*(unsigned long *)FILE_BUF == 0X24494350) return chkpci(devs);
+	if (sort)
+	{
+		struct pci_dev *devs1,*devs2;
+		for (devs1 = PCI; devs1 < devs; ++devs1)
+		{
+			for (devs2=devs1+1;devs2<devs;++devs2)
+			{
+				if (memcmp((void*)devs1,(void*)devs2,sizeof(struct pci_dev)) == 0)
+				{
+					memmove((void*)devs2,(void*)(devs-1),sizeof(struct pci_dev));
+					--devs;
+				}
+			}
+		}
+		devs->venID = 0;
+	}
+
+	int DriverPack(void);
+	switch (db_type)
+	{
+		case 2:
+			return chkpci();
+		case 3:
+			return DriverPack();
+		default:
+			for(devs = PCI;devs->venID;++devs)
+			{
+				printf("PCI\\VEN_%04X&DEV_%04X&SUBSYS_%08X&CC_%04X%02X&REV_%02X\n",
+						devs->venID,devs->devID,devs->subsys,devs->class,devs->prog,devs->revID);
+				if (db_type == 1) show_dev(devs);
+			}
+			break;
+	}
+	return 1;
+}
+/*
+	查找匹配的PCI记录,查找失败返回NULL.
+*/
+char *find_pci(char *hwIDs,int flags)
+{
+	struct pci_dev dev,*pci;
+	char *p;
+	loop:
+	p = hwIDs;
+	if ((*(unsigned long *)(p) & 0XFFDFDFDF != 0x5C494350) //PCI
+		  || (*(unsigned long *)(p+4) & 0xFFDFDFDF != VEN)//check VEN_
+		  || (*(unsigned long *)(p+13) & 0xFFDFDFDF != DEV)// check DEV_
+		)
+			return 0;
+	memset (&dev,0,sizeof(struct pci_dev));
+	dev.venID = asctohex(p+8);
+	dev.devID = asctohex(p+17);
+	p += 21;
+	while (*p == '&')
+	{
+		++p;
+		if (*(unsigned long *)p == SUB)//check SUBSYS
+		{
+			dev.subsys = asctohex(p+7);
+			p += 15;
+		}
+		else if (*(unsigned short *)p == 0x4343) //CC_
+		{
+			int t = asctohex(p+3);
+			if (t > 0xFFFF)
+			{
+				p += 9;
+				dev.class = t>>8;
+			}
+			else 
+			{
+				p += 7;
+				dev.class = t;
+			}
+		}
+		else if (*(unsigned long *)p == 0x5F564552) //REV_
+		{
+			dev.revID = (char)asctohex(p+4);
+			p += 6;
+		}
+	}
+
+	for (pci=PCI;pci->venID; pci++)
+	{
+		if (pci->venID == dev.venID && pci->devID == dev.devID)
+		{
+			if (dev.subsys && dev.subsys != pci->subsys) continue;
+			if (dev.class && dev.class != pci->class) continue;
+			if (dev.revID && dev.revID != pci->revID) continue;
+			pci->devID = 0;
+			if (flags)
+			{
+				*p = 0;
+				return hwIDs;
+			}
+			return p;
+		}
+	}
+	if (*p == ',')
+	{
+		hwIDs = p+1;
+		goto loop;
+	}
+	return NULL;
+}
+
+char *f_pos;
+char *ms_name;
+char *find_section(char *section)
+{
+	char *f;
+	while (f=f_pos)
+	{
+		f_pos = skip_to(0x100,f_pos);
+		if (*f == '[' && (section == NULL || substring(section,f,1) == 0))
+		{
+			section = ++f;
+			while (*++section != ']')
+				;
+			*section = 0;
+			return f;
+		}
+	}
+	return NULL;
+}
+
+char *get_cfg(char *string)
+{
+	char *f;
+	while (f = f_pos)
+	{
+		f_pos = skip_to(0x100,f_pos);
+		if (substring(string,f,1) == -1)
+		{
+			f += strlen(string);
+			while (*f && *f != '=')
+				++f;
+			while (isspace(*++f));
+			skip_to(0x200,f);
+			if (*f == '\"')
+			{
+				++f;
+				f[strlen(f)-1] = 0;
+			}
+			break;
+		}
+	}
+	return f;
+}
+
+char *get_ms_cfg(char *string,char count)
+{
+	sprintf(ms_name,"ms_%c_%s",count,string);
+	return get_cfg(ms_name);
+}
+
+/*
+	分析DRIVEPACK文件,根据匹配的PCI记录设置参数输出.
+*/
+int DriverPack(void)
+{
+	char *rootdir,*devdir,*deviceName,*tag,*hwids,*sysFile,*p;
+	ms_name = f_pos = FILE_BUF;
+	if (!find_section("[DriverPack]"))
+		return 0;
+	if ((rootdir = get_cfg("rootdir")) == NULL)
+		return 0;
+	for (p=rootdir;*p;++p)
+	{
+		if (*p =='\\')
+			*p = '/';
+	}
+	while (	devdir = find_section(NULL))
+	{
+		char *ms_count = get_cfg("ms_count");
+		char name[24];
+		char count = '1';
+		while (count <= *ms_count)
+		{
+			deviceName = get_ms_cfg("deviceName",count);
+			tag = get_ms_cfg("tag",count);
+			sysFile = get_ms_cfg("sysFile",count);
+			hwids = get_ms_cfg("hwids",count);
+			if (hwids = find_pci(hwids, 1))
+			{
+				printf("%s=\"%s\" ; %s/%s \"%s\" \"%s\"\n",hwids,tag,rootdir,devdir,sysFile,deviceName);
+			}
+			++count;
+		}
+	}
 	return 1;
 }
