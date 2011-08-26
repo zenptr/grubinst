@@ -757,10 +757,18 @@ int DriverPack(void)
 			deviceName = get_ms_cfg("deviceName",count);
 			tag = get_ms_cfg("tag",count);
 			sysFile = get_ms_cfg("sysFile",count);
-			hwids = get_ms_cfg("hwids",count);
-			if (hwids = find_pci(hwids, 1))
+			if (*devdir=='N' && count == '2' && hwids)
 			{
-				printf("%s=\"%s\" ; %s/%s \"%s\" \"%s\"\n",hwids,tag,rootdir,devdir,sysFile,deviceName);
+				hwids = get_ms_cfg("hwids",count);
+				printf("\"%s\"=\"%s\" ; %s/%s \"%s\" \"%s\"\n",hwids,tag,rootdir,devdir,sysFile,deviceName);
+			}
+			else
+			{
+				hwids = get_ms_cfg("hwids",count);
+				if (hwids = find_pci(hwids, 1))
+				{
+					printf("\"%s\"=\"%s\" ; %s/%s \"%s\" \"%s\"\n",hwids,tag,rootdir,devdir,sysFile,deviceName);
+				}
 			}
 			++count;
 		}

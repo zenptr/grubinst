@@ -201,6 +201,7 @@ diskid_func (char *arg,int flags)
 			}
 //			*P = (int)ret;
 			sprintf((char *)RET_VAR,"%d:%d\r\r",(unsigned char)(current_drive - 0x7F),i+1);
+			sprintf(((char*)0x4CA00),"%d.%d",(unsigned char)(current_drive - 0x7F),i+1);
 			if (debug > 0)
 				printf(" (hd%d,%d) in Ghost Style is: %d:%d\n",(unsigned int)(current_drive-0x80),(unsigned int)(current_partition >> 16),(unsigned int)(current_drive - 0x7F),i+1);
 			return 1;
