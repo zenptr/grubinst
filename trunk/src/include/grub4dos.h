@@ -254,7 +254,8 @@ rawwrite (unsigned long drive, unsigned long sector, char *buf)
 #define isspace ((int (*)(int))((*(int **)0x8300)[72]))
 #define sleep ((unsigned int (*)(unsigned int))((*(int **)0x8300)[73]))
 #define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[74]))
-
+//int envi_cmd(const char *var,char * const env,int flags);
+#define envi_cmd ((int (*)(const char*, char *const, int))((*(int **)0x8300)[75]))
 
 #define RAW_ADDR(x) (x)
 #define SCRATCHADDR  RAW_ADDR (0x37e00)

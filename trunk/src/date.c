@@ -18,6 +18,7 @@ struct realmode_regs {
 	unsigned long cs; // code segment, as input
 	unsigned long eflags; // as input and output
 };
+static unsigned long BCD2DEC(const char *bcd,int len);
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
@@ -34,5 +35,26 @@ asm(".long 0xBCBAA7BA");
 
 static int main (char *arg,int flags)
 {
-	return realmode_run((long)&int_regs);
+	struct realmode_regs int_regs = {0,0,0,-1,0,0,0,0x400,-1,-1,-1,-1,-1,0xFFFF1ACD,-1,-1};
+	if (!*arg)
+	{
+		realmode_run((long)&int_regs);
+		return printf("%04X-%02X-%02X\n",int_regs.ecx,(char)(int_regs.edx>>8),(char)int_regs.edx);
+	}
+	char tmp[8];
+	int_regs.ecx = BCD2DEC(arg,4);
+	int_regs.edx = (BCD2DEC(arg+5,2)<<8)+BCD2DEC(arg+8,2);
+	int_regs.eax = 0x500;
+	return realmode_run((long)&int_regs);;
+}
+
+static unsigned long BCD2DEC(const char *bcd,int len)
+{
+	unsigned long dec = 0;
+	while (len--)
+	{
+		dec <<= 4;
+		dec += (*bcd++ - '0');
+	}
+	return dec;
 }

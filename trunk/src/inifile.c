@@ -1,7 +1,10 @@
 #include "grub4dos.h"
-static char *find_section(char *section,char *file);
-static void skip_eol(char *line);
+static int inifile(char *section,char *item,char *value);
+static unsigned long long pos;
+static char *buff;
+static int setenvi = 0;
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
+static char *trim(char *string);
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
  */
@@ -16,91 +19,72 @@ asm(".long 0xBCBAA7BA");
  * file. Do not insert any other asm lines here.
  */
 
-int main (char *arg,int flags)
+static int main (char *arg,int flags)
 {
-	char *filename=arg;
-	char *section;
-	char *item;
-	char *file_buf;
-	char *value;
-	section = skip_to(0x200,arg);
-	if (*section != '[')
-		return 0;
-	item = section;
-	while (*++item != ']')
-		;
-	item = skip_to(0x200,item);
-	value = skip_to(0x201,item);
-	if (section[1] == ']')
-		section =NULL;
-	if (!open(filename))
-		return 0;
-	if ((file_buf=malloc(filemax))==NULL)
-	{
-		close();
-		return 0;
-	}
-	read((unsigned long long)(int)file_buf,-1,GRUB_READ);
-	file_buf[filemax] = '\0';
-	char *tmp = section;
+	char *section = NULL;
+	char *item = NULL;
+	char *value = NULL;
 	int ret = 0;
-	if ((section = find_section(section,file_buf)))
+	if (!(buff = malloc(32<<10)))
+		return 0;
+	if (!open(arg))
+		goto quit;
+	section = skip_to(0,arg);
+	item = strstr(++section,"]");
+	if (!item)
+		goto quit;
+	*item++ = 0;
+	item = skip_to(0x200,item);
+	if (substring("/B",item,1) != 1)
 	{
-		if (substring(item,"/remove",1) == 0)
-		{
-			filepos = section - file_buf;
-			ret = read((unsigned long long)(unsigned int)"[*",2,GRUB_WRITE);
-		}
-		else
-		{
-			char *p;
-			if (tmp)
-				section = skip_to(0x100 | ';',section);
-			while ((tmp=section) && *tmp != '[')
-			{
-				section = skip_to(0x100 | ';',tmp);
-				p = skip_to(0x201,tmp);
-				skip_eol(p);
-				if (*item == '\0')
-				{
-					printf("%s=%s\n",tmp,p);
-					++ret;
-				}
-				else if (substring(item,tmp,1) == 0)
-				{
-					if (*value)
-					{
-						int len = sprintf(file_buf,"%s=%s\n;",tmp,value);
-						if (len > (section - tmp - 2))
-						{
-							len = section - tmp - 2;
-						}
-						filepos = tmp - file_buf;
-						read((unsigned long long)(unsigned int)file_buf,len,GRUB_WRITE);
-					}
-					else
-					{
-						printf("%s\n",p);
-					}
-					++ret;
-					break;
-				}
-			}
-		}
+		setenvi = 1;
+		item = skip_to(0x200,item);
 	}
-	free(file_buf);
+	if (value = strstr(item,"="))
+	{
+		*value++ = 0;
+		value = trim(value);
+	}
+	else
+	{
+		value=skip_to(0x201,item);
+		if (!*value)
+			value = NULL;
+	}
+	ret = inifile(section,item,value);
+	quit:
 	close();
+	free(buff);
 	return ret;
 }
 
-static void skip_eol(char *line)
+static char *trim(char *string)
+{
+	char *s;
+	while (*string == ' ' || *string == '\t')
+		++string;
+	s = string;
+	string += strlen(string)-1;
+	while (*string == ' ' || *string == '\t')
+	{
+		--string;
+	}
+	string[1] = 0;
+	return s;
+}
+
+static char *check_eof(char *line)
 {
 	if (line == NULL)
-		return;
+		return NULL;
+	char *s1 = line;
 	while (*line)
 	{
 		if (*line == ';')
+		{
+			*line = 0;
 			break;
+		}
 		if (*line == '\"')
 		{
 			while (*++line && *line != '\"')
@@ -109,27 +93,129 @@ static void skip_eol(char *line)
 		if (*line)
 			++line;
 	}
-	if (*line != ';')
-		return;
-	while (isspace(*--line))
-	{
-		;
-	}
-	line[1]='\0';
-	return;
+	s1 = trim(s1);
+	return *s1?s1:NULL;
 }
 
-static char *find_section(char *section,char *file)
+static int read_line(char *buf)
 {
-	if (section == NULL)
-		return (*file == ';')?skip_to(0x100 | ';',file):file;
-	while (file)
+	char *s1 = buf;
+	pos = filepos;
+	while (read((unsigned long long)(int)buf,1,GRUB_READ) == 1)
 	{
-		if (*file == '[' && substring(section,file,1) != 1)
+		if (*buf == '\r' || *buf == '\n')
 		{
-			return file;
+			if (s1 == buf)
+			{
+				pos = filepos;
+				continue;
+			}
+			break;
 		}
-		file = skip_to(0x100 | ';',file);
+		else if (!*buf)
+		{
+			filepos = filemax;
+			break;
+		}
+		++buf;
 	}
-	return NULL;
+	*buf = 0;
+	return buf - s1;
 }
+
+static int find_section(char *section)
+{
+	static char *s;
+	int ret = 0;
+	if (!*section)
+		return 1;
+	while ((read_line(buff)))
+	{
+		if (*buff != '[')
+			continue;
+		s = strstr(buff,"]");
+		*s = 0;
+		s = buff + 1;
+		s = trim(s);
+		if (substring(section,s,1) == 0)
+		{
+			ret = 1;
+			break;
+		}
+	}
+	return ret;
+}
+
+static int inifile(char *section,char *item,char *value)
+{
+	char *s1,*s2;
+	int ret = 0;
+	int len;
+	int remove_section = (substring(item,"/remove",1) == 0);
+	section = trim(section);
+	item = trim(item);
+	if (remove_section && !*section)
+		return 0;
+	while (find_section(section))
+	{
+		if (remove_section)
+		{
+			filepos = pos;
+			ret = read((unsigned long long)(unsigned int)"[*",2,GRUB_WRITE);
+			continue;
+		}
+		while (len = (read_line(buff)))
+		{
+			if (*buff == '[')
+			{
+				filepos = pos;
+				break;
+			}
+			s1 = check_eof(buff);
+			if (s1)
+			{
+				s2 = skip_to(0x201,s1);
+				if (!*item)
+				{
+					if (setenvi)
+					{
+						ret = envi_cmd(s1,s2,0);
+					}
+					else
+						ret = printf("%s=%s\n",s1,s2);
+				}
+				else if (substring(item,s1,1) == 0)
+				{
+					if (value)
+					{
+						filepos = pos;
+						if (substring(value,"/d",1) == 0)
+							ret = read((unsigned long long)(unsigned int)";",1,GRUB_WRITE);
+						else
+						{
+							ret = sprintf(buff,"%s=%s",item,value);
+							if (ret > len)
+								return 0;
+							ret = read((unsigned long long)(unsigned int)buff,ret,GRUB_WRITE);
+							if (ret < len)
+								read((unsigned long long)(unsigned int)";",1,GRUB_WRITE);
+						}
+					}
+					else if (setenvi)
+					{
+						ret = envi_cmd(s1,s2,0);
+					}
+					else
+						return printf("%s",s2);
+				}
+			}
+		}
+		if (!*section)
+			return ret;
+	}
+	return ret;
+}
+
+
+
+

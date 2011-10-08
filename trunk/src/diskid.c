@@ -38,12 +38,14 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 	2010-08-08 添加 gid=参数,用于设置当前root到指定的id.
 	diskid gid=1:1 切换到第一个磁盘第一个分区
  */
-
+#define RET_VAR 0x4FF00
+#define MAX_PART 26
 int GRUB = 0x42555247;/* this is needed, see the following comment. */
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
  */
-
+static int diskid_func (char *arg,int flags);
+typedef struct part_info {unsigned long id, part, start;} partinfo;
 asm(".long 0x534F4434");
 asm(ASM_BUILD_DATE);
 /* a valid executable file for grub4dos must end with these 8 bytes */
@@ -54,7 +56,7 @@ asm(".long 0xBCBAA7BA");
  * file. Do not insert any other asm lines here.
  */
 
-int
+static int
 main ()
 {
 	void *p = &main;
@@ -63,79 +65,15 @@ main ()
 	return diskid_func (arg , flags);
 }
 
-
-int
-diskid_func (char *arg,int flags)
+static int get_partinfo(partinfo *PART_INFO)
 {
 	char mbr[512];
-	#define RET_VAR 0x4FF00
-	#define MAX_PART 26
-  unsigned long part = 0xFFFFFF;
-  unsigned long start, len, offset, ext_offset1;
-  unsigned long type, entry1;
-  typedef struct part_info {unsigned long id, part, start;} partinfo;
-  unsigned long long ret = 0;
-  partinfo PART_INFO[MAX_PART], *PI/*, *P2*/;
-  unsigned long id;
-  
-  errnum = ERR_BAD_ARGUMENT;
-  
-  if (*arg && (memcmp(arg,"ret=",4) == 0))
-  {
-	arg =skip_to(1,arg);
-	safe_parse_maxint(&arg,&ret);
-	arg = skip_to (0,arg);
-  }
-  if (! *arg || *arg == ' ' || *arg == '\t')
-  {
-	current_drive = saved_drive;
-	current_partition = saved_partition;
-  }
-	else if (memcmp(arg, "gid=", 4) == 0) /*gid x:y */
-  {
-	arg =skip_to(1,arg);
-	if (*arg=='*')/*如果是以*开头的,则读取对应内存地址的值*/
-	{
-		arg++;
-		if (! safe_parse_maxint(&arg,&ret))
-			return 0;
-		arg =(char *)(unsigned int)ret;
-	}
-
-	if (! safe_parse_maxint(&arg,&ret))
-		return 0;
-	if (! ret) return 0;
-
-	current_drive = 0x7f + ret;
-	current_partition = 0xFFFF;
-
-	arg++;
-	if (! safe_parse_maxint(&arg,&ret))
-		return 0;
-	if (! ret || ret > MAX_PART) return 0;
-	ret |= 0x10000;
-  }
-	else if (memcmp(arg, "uid=", 4) == 0)
-  {
-	ret = 0x20000;
-  }
-  else if (! set_device (arg))
-    return 0;
-
-  /* The drive must be a hard disk.  */
-  if (! (current_drive & 0x80))
-    {
-      return 0;
-    }
-  
-  /* The partition must be a PC slice.  */
-  if ((current_partition >> 16) == 0xFF
-      || (current_partition & 0xFFFF) != 0xFFFF)
-    {
-      return 0;
-    }
-	errnum = 0;
-  /* Look for the partition.  */
+	unsigned long part = 0xFFFFFF;
+	unsigned long start, len, offset, ext_offset1;
+	unsigned long type, entry1;
+	partinfo *PI;
+	unsigned long id;
+	/* Look for the partition.  */
   PI = PART_INFO;
   id = 0UL;
   while ((	next_partition_drive		= current_drive,
@@ -157,11 +95,12 @@ diskid_func (char *arg,int flags)
 		PI->id = ++id;
 		PI->part = part;
 		PI->start = start;
-		PI++;
+		++PI;
 		if (id >= MAX_PART) break;
 	  }
 	  errnum = ERR_NONE;
 	}
+	PI->id = 0;
 	errnum = ERR_NONE;
 
 	long i,j;
@@ -175,17 +114,171 @@ diskid_func (char *arg,int flags)
 			PART_INFO[j] = PART_INFO[i];
 			PART_INFO[i] = t_pi;
 		}
-/*指定了gid参数,设定当前root到对应分区*/
-	if (ret && ret < 0x20000)
+
+	return id;
+}
+
+static int
+diskid_func (char *arg,int flags)
+{
+  unsigned long long ret = 0;
+  partinfo PART_INFO[MAX_PART];
+  unsigned long id;
+
+  errnum = ERR_BAD_ARGUMENT;
+  if (*arg && (memcmp(arg,"ret=",4) == 0))
+  {
+	arg =skip_to(1,arg);
+	safe_parse_maxint(&arg,&ret);
+	arg = skip_to (0,arg);
+  }
+  if (! *arg || *arg == ' ' || *arg == '\t')
+  {
+	current_drive = saved_drive;
+	current_partition = saved_partition;
+  }
+	else if (memcmp(arg,"info",4) == 0)
 	{
-		ret &= 0x1f;
-		if (ret > id) return !(errnum = ERR_NO_PART);
-		sprintf(mbr,"(hd%d,%d)",current_drive - 0x80,PART_INFO[--ret].part >> 16);
-		if (debug)	printf("setting root to %s\n",mbr);
-		return builtin_cmd("root", mbr, 1);
+		unsigned long tmp_drive = saved_drive;
+		unsigned long tmp_partition = saved_partition;
+		char tmp[20];
+		for (id=0;id<(*((char *)0x475));)
+		{
+			saved_drive = current_drive = 0x80 + id;
+			current_partition = 0xffffff;
+			open_device();
+			ret = sprintf(tmp,"%ld",part_length<<9);
+			printf(" Disk: %d\t",++id);
+			if (ret > 9)
+				printf("%.*s GB\n",(int)(ret-9),tmp);
+			else
+				printf("%.*s MB\n",(int)(ret-6),tmp);
+			partinfo *pi = PART_INFO;
+			get_partinfo(PART_INFO);
+			while (pi->id)
+			{
+				current_partition = saved_partition = pi->part;
+				open_device();
+				if (current_drive == tmp_drive && current_partition == tmp_partition)
+				{
+					if (current_term->SETCOLORSTATE)
+						current_term->SETCOLORSTATE (COLOR_STATE_HIGHLIGHT);
+					printf("   * %d:%d\t",id,pi->id);
+				}
+				else
+					printf("     %d:%d\t",id,pi->id);
+				if (part_length>>22)
+					printf("%d GB\t",part_length>>21);
+				else
+					printf("%d MB\t",part_length>>11);
+				builtin_cmd("root","", 1);
+				if (current_term->SETCOLORSTATE)
+					current_term->SETCOLORSTATE (COLOR_STATE_STANDARD);
+				++pi;
+			}
+		}
+		saved_drive = tmp_drive;
+		saved_partition = tmp_partition;
+		return 1;
 	}
+	else if (memcmp(arg, "gid=", 4) == 0) /*gid x:y */
+	{
+		int dd,dp;
+		arg =skip_to(1,arg);
+		if (*arg=='*')/*如果是以*开头的,则读取对应内存地址的值*/
+		{
+			arg++;
+			if (! safe_parse_maxint(&arg,&ret))
+				return 0;
+			arg =(char *)(unsigned int)ret;
+		}
+
+		if (! safe_parse_maxint(&arg,&ret))
+			return 0;
+		dd = (int)ret;
+		arg++;
+		if (! safe_parse_maxint(&arg,&ret))
+			return 0;
+		++arg;
+		dp = (int)ret;
+		if (dd == 0)
+			dd = saved_drive - 0x7f;
+		else if (dd < 0)
+			dd = (*((char *)0x475)) + dd + 1;
+
+		if (dd < 1)
+			return 0;
+		for(current_drive = 0x7f + dd;dd && dd<=(*((char *)0x475));++arg)
+		{
+			id = get_partinfo(PART_INFO);
+
+			if (dp < 0)
+				dp += id + 1;
+			if (dp > id || dp <= 0)
+				break;
+			if (*arg == '+')
+			{
+				if (dp >= id)
+				{
+					dp = 1;
+					if (dd < *((char *)0x475))
+						++dd;
+					else
+						dd = 1;
+					continue;
+				}
+				++dp;
+			}
+			else if (*arg == '-')
+			{
+				if (dp <= 1)
+				{
+					dp = -1;
+					if (dd > 1)
+						--dd;
+					else
+						dd = *((char *)0x475);
+					continue;
+				}
+				--dp;
+			}
+			saved_drive = current_drive;
+			saved_partition = PART_INFO[dp-1].part;
+			sprintf((char *)RET_VAR,"%d:%d\r\r",dd,dp);
+			sprintf(((char*)0x4CA00),"%d.%d",dd,dp);
+			if (debug > 0)
+				printf(" %d:%d",dd,dp);
+			return builtin_cmd("root","()", 1);
+		}
+
+		return !(errnum = ERR_NO_PART);
+	}
+	else if (memcmp(arg, "uid=", 4) == 0)
+  {
+	ret = 0x20000;
+  }
+  else if (! set_device (arg))
+    return 0;
+
+  /* The drive must be a hard disk.  */
+  if (! (current_drive & 0x80))
+    {
+       errnum = ERR_BAD_ARGUMENT;
+      return 0;
+    }
+  
+  /* The partition must be a PC slice.  */
+  if ((current_partition >> 16) == 0xFF
+      || (current_partition & 0xFFFF) != 0xFFFF)
+    {
+      errnum = ERR_BAD_ARGUMENT;
+      return 0;
+    }
+	/* Look for the partition.  */
+	id = get_partinfo(PART_INFO);
 /*获取指定分区对应的ID*/	
-	for (i=0UL;i<id;i++)
+	long i;
+	for (i=0UL;i<id;++i)
 		if (PART_INFO[i].part == current_partition)
 		{
 			if (ret) /*指定了ret参数,把ID信息写入到指定内存中格式:0xXXYYAABB */
@@ -199,7 +292,6 @@ diskid_func (char *arg,int flags)
 				*P <<= 8;
 				*P |= i + 1;						/*BB 从1开始的分区编号,以该分区在磁盘的位置排序*/
 			}
-//			*P = (int)ret;
 			sprintf((char *)RET_VAR,"%d:%d\r\r",(unsigned char)(current_drive - 0x7F),i+1);
 			sprintf(((char*)0x4CA00),"%d.%d",(unsigned char)(current_drive - 0x7F),i+1);
 			if (debug > 0)

@@ -195,11 +195,13 @@ int help(void)
 {
 return printf("\n CHKPCI For GRUB4DOS,Compiled time: %s %s\n\
 \n CHKPCI is a utility that can be used to scan PCI buses and report information about the PCI device.\n\
-\n CHKPCI [-h] [-o] [-u] [-cc:CC] [FILE]\n\
+\n CHKPCI [-h] [-o] [-u] [-cc:CC] [-sc:SC] [-srs] [FILE]\n\
 \n Options:\n\
 \n -h      show this info.\n\
-\n -h      Unique.\n\
+\n -u      Unique.\n\
 \n -cc:CC  scan Class Codes with CC only.\n\
+\n -sc:SC  scan SubClass Codes.\n\
+\n -srs    for SATA/SCSI/RAID.\n\
 \n FILE    PCI device database file.\n\
 \n For more information.Please visit web-site at http://chenall.net/tag/grub4dos\n\
  to get this source and bin: http://grubutils.googlecode.com\n",__DATE__,__TIME__);
@@ -314,7 +316,7 @@ int show_dev(struct pci_dev *pci)
 #define VEN 0x5F4E4556
 #define DEV 0X5F564544
 #define SUB 0x53425553
-char *find_pci(char *hwIDs, int flags);
+char *find_pci(char *hwIDs, int *flags);
 
 int chkpci(void)
 {
@@ -379,7 +381,7 @@ int chkpci(void)
 		}
 #endif
 
-		if (find_pci(P+1,0))
+		if (find_pci(P+1,NULL))
 		{
 			if (out_fmt)
 			{
@@ -613,11 +615,13 @@ int chkpci_func(char *arg,int flags)
 /*
 	查找匹配的PCI记录,查找失败返回NULL.
 */
-char *find_pci(char *hwIDs,int flags)
+char *find_pci(char *hwIDs,int *flags)
 {
 	struct pci_dev dev,*pci;
 	char *p;
 	loop:
+	while (*hwIDs == ',' || *hwIDs == ' ' || *hwIDs == '\t')
+		++hwIDs;
 	p = hwIDs;
 	if ((*(unsigned long *)(p) & 0XFFDFDFDF != 0x5C494350) //PCI
 		  || (*(unsigned long *)(p+4) & 0xFFDFDFDF != VEN)//check VEN_
@@ -664,12 +668,12 @@ char *find_pci(char *hwIDs,int flags)
 			if (dev.subsys && dev.subsys != pci->subsys) continue;
 			if (dev.class && dev.class != pci->class) continue;
 			if (dev.revID && dev.revID != pci->revID) continue;
-			pci->devID = 0;
 			if (flags)
 			{
-				*p = 0;
+				*flags = p - hwIDs;
 				return hwIDs;
 			}
+			pci->devID = 0;
 			return p;
 		}
 	}
@@ -725,9 +729,9 @@ char *get_cfg(char *string)
 	return f;
 }
 
-char *get_ms_cfg(char *string,char count)
+char *get_ms_cfg(char *string,unsigned int count)
 {
-	sprintf(ms_name,"ms_%c_%s",count,string);
+	sprintf(ms_name,"ms_%d_%s",count,string);
 	return get_cfg(ms_name);
 }
 
@@ -749,10 +753,13 @@ int DriverPack(void)
 	}
 	while (	devdir = find_section(NULL))
 	{
-		char *ms_count = get_cfg("ms_count");
 		char name[24];
-		char count = '1';
-		while (count <= *ms_count)
+		unsigned int count = 1,ms_count;
+		deviceName = get_cfg("ms_count");
+		ms_count = *deviceName++ - '0';
+		if (*deviceName)
+			ms_count=ms_count*10+(*deviceName - '0');
+		while (count <= ms_count)
 		{
 			deviceName = get_ms_cfg("deviceName",count);
 			tag = get_ms_cfg("tag",count);
@@ -765,9 +772,17 @@ int DriverPack(void)
 			else
 			{
 				hwids = get_ms_cfg("hwids",count);
-				if (hwids = find_pci(hwids, 1))
+				int len = 1;
+				if (hwids = find_pci(hwids, &len))
 				{
-					printf("\"%s\"=\"%s\" ; %s/%s \"%s\" \"%s\"\n",hwids,tag,rootdir,devdir,sysFile,deviceName);
+					putchar('\"');
+					while(hwids)
+					{
+						printf("%.*s",len,hwids);
+						if (hwids = find_pci(hwids+len , &len))
+							putchar(',');
+					}
+					printf("\"=\"%s\" ; %s/%s \"%s\" \"%s\"\n",tag,rootdir,devdir,sysFile,deviceName);
 				}
 			}
 			++count;
