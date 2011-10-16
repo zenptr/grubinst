@@ -195,7 +195,7 @@ arg比较来源字符串,string要对比的字符串.
 #define strcmp_ex(arg,string) grub_memcmp(arg,string,0)
 static char *strstrn(const char *s1, const char *s2, const int n);	// 查找子串
 // 环境变量功能函数
-static int envi_cmd(const char *var, char * const env, int flags);
+//static int envi_cmd(const char *var, char * const env, int flags);
 #define set_envi(var, val)			envi_cmd(var, val, 0)
 #define get_env(var, val)			envi_cmd(var, val, 1)
 #define get_env_all()				envi_cmd(NULL, NULL, 2)
@@ -1453,6 +1453,7 @@ static int strcpyn(char *dest,const char *src,int n)
 	*dest = '\0';
 	return (int)(src-p);
 }
+#if 0
 static int envi_cmd(const char *var,char * const env,int flags)
 {
 #ifdef DEBUG
@@ -1601,6 +1602,7 @@ static int envi_cmd(const char *var,char * const env,int flags)
 	memmove(ENVI[i],env,MAX_ENV_LEN);
 	return 1;
 }
+#endif
 static int read_val(char **str_ptr,unsigned long long *val)
 {
 		while (**str_ptr == ' ' || **str_ptr == '\t') (*str_ptr)++;
