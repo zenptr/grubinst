@@ -115,22 +115,10 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
   #define VBE_CAPS_BLANKFN9  (((uint32_t)1) << 2)
   #define VBE_MA_MODEHW (((uint32_t)1) << 0)
   #define VBE_MA_HASLFB (((uint32_t)1) << 7)
-  #define VBE_MM_DCOLOR 6
-  struct _rgba_t
-  {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t a;
-  } __attribute__ ((packed));
-  typedef struct _rgba_t rgba_t;
-
-int GetModeInfo (uint16_t p_mode);
-int SetMode (uint16_t p_mode);
+int GetModeInfo (uint16_t mode);
+int SetMode (uint16_t mode);
 void CloseMode ();
 uint32_t EncodePixel (uint8_t r, uint8_t g, uint8_t b);
-void GetPal (rgba_t* pal);
-void SetPal (rgba_t* pal);
 
 void gfx_Clear8  (uint32_t color);
 void gfx_Clear16 (uint32_t color);
@@ -151,8 +139,8 @@ static VBEDriverInfo_t drvInfo;
 static VBEModeInfo_t modeInfo;
 static uint32_t l_pixel;
 
-
-static int bioscall(uint8_t INT,uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx);
+static int get_font(int flags);
+static int _INT10_(uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx,uint32_t es,uint32_t edi);
 static int vbe_init(int mode);
 static void vbe_end(void);
 static void vbe_cls(void);
@@ -160,8 +148,6 @@ static void vbe_gotoxy(int x, int y);
 static int vbe_getxy(void);
 static void vbe_scroll(void);
 static void vbe_putchar (unsigned int c);
-
-
 static int vbe_setcursor (int on);
 static int vbe_current_color = -1;
 static int vbe_standard_color = -1;
@@ -169,11 +155,17 @@ static int vbe_normal_color = 0x55ffff;
 static int vbe_highlight_color = 0xff5555;
 static int vbe_helptext_color = 0xff55ff;
 static int vbe_heading_color = 0xffff55;
-static int vbe_cursor_color;
+static int vbe_cursor_color = 0xff00ff;
 static color_state vbe_color_state = COLOR_STATE_STANDARD;
 static void vbe_setcolorstate (color_state state);
 static void vbe_setcolor (int normal_color, int highlight_color, int helptext_color, int heading_color);
-static int showcursor = 1;
+static struct 
+{
+	unsigned short mode;
+	unsigned short cursor;
+	char *img;
+} vbe_flags = {0,1,NULL};
+
 static int vbe_vfont(char *file);
 static unsigned vfont_size=0;
 static uint8_t pre_ch;
@@ -181,7 +173,7 @@ static char vesa_name[]="VESA_TEST";
 static struct term_entry vesa;
 static char mask[8]={0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
 static char vfont[2048];
-
+static int open_bmp(char *file);
 
 struct realmode_regs {
 	unsigned long edi; // as input and output
@@ -209,7 +201,7 @@ unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the follow
 //asm(".long 0x534F4434");
 
 /* a valid executable file for grub4dos must end with these 8 bytes */
-//asm(ASM_BUILD_DATE);
+asm(ASM_BUILD_DATE);
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");
 
@@ -226,7 +218,7 @@ void demo1_Run();
 int main(char *arg,int flags)//( int argc, char* argv[] )
 {
   uint16_t*	modeList;
-  uint16_t	mode;
+  uint16_t	mode = 0;
 
 	if ((int)&main != 0x50000)//init move program to 0x50000
 	{
@@ -261,11 +253,11 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 		vesa.SETCURSOR = vbe_setcursor;
 		vesa.STARTUP = vbe_init;
 		vesa.SHUTDOWN = vbe_end;
+		font8x16 = (char*)get_font(0x600);
 	}
 
 	if (memcmp(arg,"demo",4) != 0)
 	{
-		mode = 0x101;
 		while (*arg)
 		{
 			if (memcmp(arg,"vfont=",6) == 0)
@@ -281,19 +273,34 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 					return 0;
 				mode = (uint16_t)ll;
 			}
+			if (memcmp(arg,"bmp",3)== 0)
+			{
+				open_bmp(skip_to(1,arg));
+			}
 			arg = skip_to(0,arg);
 		}
-
+		if (!mode && !vbe_flags.mode)
+		{
+			if (GetModeInfo (0x115))
+				mode = 0x115;
+			else if (GetModeInfo (0x114))
+				mode = 0x114;
+		}
 		if (!vbe_init (mode))
 		{
-			 printf( "VBE mode %4x not supported\n", mode);
-			 getkey();
-			 return 0;
+			printf( "VBE mode %4x not supported\n", mode);
+			getkey();
+			return 0;
 		}
 		current_term = &vesa;
 		vesa.chars_per_line = modeInfo.XResolution>>3;
 		vesa.max_lines = modeInfo.YResolution>>4;
+		if (vbe_flags.img)
+			memmove((char*)modeInfo.PhysBasePtr,vbe_flags.img,modeInfo.YResolution*modeInfo.BytesPerScanline);
+		printf("%dx%dx%d,%dx%d\n",modeInfo.XResolution,modeInfo.YResolution,modeInfo.BitsPerPixel,vesa.chars_per_line,vesa.max_lines);
+		getkey();
 		vbe_cls();
+//		memmove((unsigned char*)modeInfo.PhysBasePtr,vbe_flags.img,204800);
 		return 1;
 	}
 
@@ -391,6 +398,7 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 		"FieldPos=%d:%d:%d:%d\n"
 		"LinMaskSize=%d:%d:%d:%d\n"
 		"LinFieldPos=%d:%d:%d:%d\n"
+		"BytesPerScanline=%d\n"
 		"Press any key to continue...\n",
 		mode,
 		modeInfo.XResolution,
@@ -415,7 +423,8 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 		modeInfo.LinRedFieldPosition,
 		modeInfo.LinGreenFieldPosition,
 		modeInfo.LinBlueFieldPosition,
-		modeInfo.LinRsvdFieldPosition
+		modeInfo.LinRsvdFieldPosition,
+		modeInfo.BytesPerScanline
 	);
 	getkey();
 	CloseMode ();
@@ -459,25 +468,28 @@ static int vbe_vfont(char *file)
 	return 1;
 }
 
-static int bioscall(uint8_t INT,uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx)
+static int _INT10_(uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx,uint32_t es,uint32_t edi)
 {
-	struct realmode_regs int_regs = {0,0,0,-1,ebx,edx,ecx,eax,-1,-1,-1,-1,-1,0xFFFF00CD | (INT<<8),-1,-1};
+	struct realmode_regs int_regs = {edi,0,0,-1,ebx,edx,ecx,eax,-1,-1,es,-1,-1,0xFFFF10CD,-1,-1};
 	realmode_run((long)&int_regs);
 	return int_regs.eax;
 }
 
 static int vbe_setcursor (int on)
 {
-	showcursor = on;
+	vbe_flags.cursor = on;
 	return 0;
 }
 
 static int vbe_init(int mode)
 {
 	if (!mode)
-		mode = 0x101;
+	{
+		mode = vbe_flags.mode;
+	}
 	if (!GetModeInfo(mode) || !SetMode (mode))
 		return 0;
+	vbe_flags.mode = mode;
 	fontx=0,fonty=0;
 	vesa.chars_per_line = modeInfo.XResolution>>3;
 	vesa.max_lines = modeInfo.YResolution>>4;
@@ -486,6 +498,8 @@ static int vbe_init(int mode)
 
 static void vbe_end(void)
 {
+	if (vbe_flags.img)
+		free(vbe_flags.img);
 	CloseMode ();
 }
 
@@ -508,7 +522,7 @@ static void vbe_gotoxy(int x, int y)
 		x = vesa.chars_per_line;
 	if (y > vesa.max_lines)
 		y = vesa.max_lines;
-	if (showcursor)
+	if (vbe_flags.cursor)
 	{
 		gfx_FillRect (fontx<<3,(fonty<<4)+15,(fontx+1)<<3,(fonty+1)<<4, 0);
 		gfx_FillRect (x<<3,(y<<4)+15,(x+1)<<3,(fonty+1)<<4, vbe_cursor_color);
@@ -566,20 +580,20 @@ static void vbe_putchar (unsigned int c)
 		--fonty;
 	}
 
-	if (c == '\n')
+	if ((char)c == '\n')
 	{
 		return vbe_gotoxy(fontx, fonty + 1);
 	}
-	else if (c == '\r') {
+	else if ((char)c == '\r') {
 		return vbe_gotoxy(0, fonty);
 	}
 
-	char *cha = (char*)get_font(0x600) + ((unsigned char)c<<4);
+	char *cha = font8x16 + ((unsigned char)c<<4);
 	int i,j;
 
 	if (vfont_size)
 	{
-		if (c >= 0x80 && (pre_ch - c) == 0x40 && c < 0x80+vfont_size)
+		if ((unsigned char)c >= '\x80' && (pre_ch - (unsigned char)c) == '\x40' && (unsigned char)c < 0x80+vfont_size)
 		{
 			uint8_t ch = pre_ch;
 			if (!fontx && fonty)
@@ -718,7 +732,7 @@ static void vbe_setcolor (int normal_color, int highlight_color, int helptext_co
 {
 	if (normal_color == -1)
 	{
-		bioscall(0x10,0x1010,0,highlight_color,highlight_color>>8);
+		_INT10_(0x1010,0,highlight_color,highlight_color>>8,-1,0);
 		vbe_cursor_color = EncodePixel(helptext_color>>16,helptext_color>>8,helptext_color);
 		return;
 	}
@@ -781,12 +795,15 @@ static uint32_t sys_RM16ToFlat32( uint32_t p_RMSegOfs )
 int GetDriverInfo ()
 {
     char             l_vbe2Sig[4] = "VBE2";
-    struct realmode_regs Regs;
     VBEDriverInfo_t* di;
+    di = (VBEDriverInfo_t*)0x20000;
+    memset (di, 0, 1024);
+    memcpy (di, l_vbe2Sig, 4);
+#if 0
+    struct realmode_regs Regs;
 
-      di = (VBEDriverInfo_t*)0x20000;
-      memset (di, 0, 1024);
-      memcpy (di, l_vbe2Sig, 4);
+
+
 
       Regs.eax = 0x4F00;
       Regs.es  = 0x2000;
@@ -807,7 +824,11 @@ int GetDriverInfo ()
 
         realmode_run((long)&Regs);
 
-      if( (((uint16_t)Regs.eax) == 0x004F) &&
+      if( (((uint16_t)Regs.eax) == 0x004F)
+#else
+	   if ((_INT10_(0x4F00,0,0,0,0x2000,0) == 0x4f)
+#endif
+       &&
         (memcmp/*strncmp*/(di->VBESignature, "VESA", 4) == 0) &&
         (di->VBEVersion >= 0x200) )
       {
@@ -826,19 +847,20 @@ int GetDriverInfo ()
     return 0;
 }
 
-int GetModeInfo (uint16_t p_mode)
+int GetModeInfo (uint16_t mode)
 {
-    struct realmode_regs Regs;
+
     VBEModeInfo_t* mi;
 
-    if (!p_mode || p_mode == 0xFFFF)
+    if (!mode || mode == 0xFFFF)
       return 0;
 
     mi = (VBEModeInfo_t*)(0x20000 + 1024);
     memset (mi, 0, 1024);
-
+#if 0
+   struct realmode_regs Regs;
     Regs.eax = 0x4F01;
-    Regs.ecx = p_mode;
+    Regs.ecx = mode;
     Regs.es  = 0x2000;
     Regs.edi = 1024;
         Regs.ebx = 0;
@@ -857,6 +879,9 @@ int GetModeInfo (uint16_t p_mode)
         realmode_run((long)&Regs);
 
     if (((uint16_t)Regs.eax) != 0x004F)
+#else
+	if(_INT10_(0x4F01,0,mode,0,0x2000,1024) != 0x004F)
+#endif
       return 0;
 
     // Mode must be supported
@@ -888,139 +913,6 @@ int GetModeInfo (uint16_t p_mode)
 }
 
   /*
-   *    Set VBE LFB display mode. Ignores banked display modes.
-   */
-
-int SetMode (uint16_t p_mode)
-{
-    //struct realmode_regs Regs;
-    uint32_t      size;
-
-    // Already validates Mode and LFB support
-
-   // memset( &Regs, 0, sizeof(Regs) );
-   // Regs.eax = 0x4F02;
-   // Regs.ebx = p_mode | 0x4000; // 0x4000 = LFB flag
-   //     Regs.ecx = 0;
-   //     Regs.edx = 0;
-	//Regs.esi = 0;
-	//Regs.edi = 0;
-	//Regs.ebp = 0;
-	//Regs.esp = -1;
-	//Regs.ss = -1;
-	//Regs.ds = -1;
-	//Regs.es = -1;
-	//Regs.fs = -1;
-	//Regs.gs = -1;
-	//Regs.eflags = -1;
-	//Regs.cs = -1;
-	//Regs.eip = 0xFFFF10CD;
-
-        //realmode_run((long)&Regs);
-
-    //if( ((uint16_t)Regs.eax) != 0x004F )
-    if (bioscall(0x10,0x4f02,p_mode | 0x4000,0,0) != 0x004f)
-      return 0;
-
-    size = modeInfo.YResolution * modeInfo.BytesPerScanline;
-
-    if (modeInfo.MemoryModel == 4 && modeInfo.BitsPerPixel == 8)
-    {
-	/* set "linear" pallete to simulate Direct Color of 3:3:2 */
-	int i;
-	rgba_t pal[256];
-
-	GetPal (pal);
-	for (i = 0; i < 256; i++)
-	{
-		int r, g, b;
-		r = (i >> 5)*37;
-		g = ((i>>2)&7)*37;
-		b = (i & 3)*85;
-		pal[i].r = r>255?255:r;
-		pal[i].g = g>255?255:g;
-		pal[i].b = b>255?255:b;
-	}
-
-	SetPal (pal);
-    }
-	vbe_cursor_color = EncodePixel(0xff,0,0xff);
-    return 1;
-}
-
-void CloseMode ()
-{
-	bioscall(0x10,3,0,0,0);
-}
-
-  /*
-   *  uint32_t EncodePixel (r, g, b)
-   *
-   *  Purpose:
-   *    Encodes R, G, B triplet into generic 32-bit pixel format.
-   *    Intended for 15/16/24/32-BPP, 8-BPP needs color matching.
-   *
-   *  Returns:
-   *    Encoded pixel on success
-   */
-uint32_t EncodePixel (uint8_t r, uint8_t g, uint8_t b)
-{
-    uint32_t R, G, B;
-
-    R = ((r >> (8 - modeInfo.RedMaskSize  )) & ((1UL<<modeInfo.RedMaskSize)-1  )) << modeInfo.RedFieldPosition;
-    G = ((g >> (8 - modeInfo.GreenMaskSize)) & ((1UL<<modeInfo.GreenMaskSize)-1)) << modeInfo.GreenFieldPosition;
-    B = ((b >> (8 - modeInfo.BlueMaskSize )) & ((1UL<<modeInfo.BlueMaskSize)-1 )) << modeInfo.BlueFieldPosition;
-
-    return (R | G | B);
-}
-
-  /*
-   *  void GetPal(*pal );
-   *
-   *  Purpose:
-   *    Copies hardware palette into an array of R,G,B,A values.
-   *
-   *  Returns:
-   *    Nothing
-   */
-
-void GetPal (rgba_t* pal)
-{
-  asm ("  pushl %edi");
-  asm ("  cld");
-  asm ("  movl    %0, %%edi" : :"m"(pal));
-  asm ("  testl   %edi, %edi");
-  asm ("  jz      GetPal_Error");
-  
-  asm ("  movw    $0x3C7, %dx");
-  asm ("  xorb    %al, %al");
-  asm ("  movl    $256, %ecx");
-  asm ("  outb    %al, %dx");
-  
-  asm ("  movw    $0x3C9, %dx");
-  
-  asm ("GetPal_Loop:");
-  asm ("  inb     %dx, %al");
-  asm ("  shlb    $2, %al");
-  asm ("  stosb");
-  
-  asm ("  inb     %dx, %al");
-  asm ("  shlb    $2, %al");
-  asm ("  stosb");
-  
-  asm ("  inb     %dx, %al");
-  asm ("  shlb    $2, %al");
-  asm ("  stosb");
-
-  asm ("  incl    %edi");
-  
-  asm ("  loop    GetPal_Loop");
-  
-  asm ("GetPal_Error:");
-  asm ("  popl %edi");
-}
-
-  /*
    *  void SetPal (*pal);
    *
    *  Purpose:
@@ -1030,7 +922,7 @@ void GetPal (rgba_t* pal)
    *    Nothing
    */
 
-void SetPal (rgba_t* pal)
+static void SetPal (char* pal)
 {
   asm ("  pushl %esi");
   asm ("  cld");
@@ -1064,6 +956,141 @@ void SetPal (rgba_t* pal)
   
   asm ("SetPal_Error:");
   asm ("  popl %esi");
+}
+
+  /*
+   *    Set VBE LFB display mode. Ignores banked display modes.
+   */
+
+int SetMode (uint16_t mode)
+{
+	//struct realmode_regs Regs;
+
+	// Already validates Mode and LFB support
+
+	//Regs.eax = 0x4F02;
+	//Regs.ebx = mode | 0x4000; // 0x4000 = LFB flag
+	//Regs.ecx = 0;
+	//Regs.edx = 0;
+	//Regs.esi = 0;
+	//Regs.edi = 0;
+	//Regs.ebp = 0;
+	//Regs.esp = -1;
+	//Regs.ss = -1;
+	//Regs.ds = -1;
+	//Regs.es = -1;
+	//Regs.fs = -1;
+	//Regs.gs = -1;
+	//Regs.eflags = -1;
+	//Regs.cs = -1;
+	//Regs.eip = 0xFFFF10CD;
+
+	//realmode_run((long)&Regs);
+
+	//if (((uint16_t)Regs.eax) != 0x004F)
+	if (_INT10_(0x4F02,0x4000|mode,0,0,-1,0) != 0x004F)
+		return 0;
+
+	if (modeInfo.MemoryModel == 4 && modeInfo.BitsPerPixel == 8)
+	{
+		/* Using BIOS to set palette to simulate Direct Color of 3:3:2 */
+		struct PaletteEntry
+		{
+			uint8_t Blue;	// Blue channel value (6 or 8 bits)
+			uint8_t Green;	// Green channel value (6 or 8 bits)
+			uint8_t Red;	// Red channel value(6 or 8 bits)
+			uint8_t Alignment;	// DWORD alignment byte (unused)
+		} __attribute__ ((packed));
+
+		int i;
+		struct PaletteEntry palette[256];
+		// Note that the palette array is passed on the stack. So it is
+		// accessible in realmode.
+
+		for (i = 0; i < 256; i++)
+		{
+			int r, g, b;
+			r = (i >> 5)*37;
+			g = ((i >> 2) & 7)*37;
+			b = (i & 3)*85;
+			palette[i].Blue = b;
+			palette[i].Green = g>255?255:g;
+			palette[i].Red = r>255?255:r;
+		}
+		//Regs.eax = 0x4F09;
+		//Regs.ebx = 0;	// BL=0 Set Palette Data
+		//Regs.ecx = 256;	// Number of palette registers to update
+		//Regs.edx = 0;	// First of the palette registers to update (start)
+		//Regs.esi = 0;
+		//Regs.edi = (uint32_t)palette;	// Table of palette values
+		//Regs.ebp = 0;
+		//Regs.esp = -1;
+		//Regs.ss = -1;
+		//Regs.ds = -1;
+		//Regs.es = 0;	// ES:DI points to palette entries.
+		//Regs.fs = -1;
+		//Regs.gs = -1;
+		//Regs.eflags = -1;
+		//Regs.cs = -1;
+		//Regs.eip = 0xFFFF10CD;
+
+		//	  realmode_run((long)&Regs);
+
+		//if (((uint16_t)Regs.eax) != 0x004F)
+		if (_INT10_(0x4F09,0,256,0,0,(uint32_t)palette) != 0x004F)
+		{
+			struct
+			{
+			 uint8_t r;
+			 uint8_t g;
+			 uint8_t b;
+			 uint8_t a;
+			} __attribute__ ((packed)) pal[256];
+
+			for (i = 0; i < 256; i++)
+			{
+				int r, g, b;
+				r = (i >> 5)*37;
+				g = ((i >> 2) & 7)*37;
+				b = (i & 3)*85;
+				pal[i].r = r>255?255:r;
+				pal[i].g = g>255?255:g;
+				pal[i].b = b;
+			}
+			pal[0].r = 0;
+			pal[0].g = 33;
+			pal[0].b = 99;
+			SetPal ((char*)pal);
+			return 2;
+		}
+	}
+	return 1;
+}
+
+void CloseMode ()
+{
+	_INT10_(3,0,0,0,-1,0);
+}
+
+  /*
+   *  uint32_t EncodePixel (r, g, b)
+   *
+   *  Purpose:
+   *    Encodes R, G, B triplet into generic 32-bit pixel format.
+   *    Intended for 15/16/24/32-BPP, 8-BPP needs color matching.
+   *
+   *  Returns:
+   *    Encoded pixel on success
+   */
+uint32_t EncodePixel (uint8_t r, uint8_t g, uint8_t b)
+{
+    uint32_t R, G, B;
+
+    R = ((r >> (8 - modeInfo.RedMaskSize  )) & ((1UL<<modeInfo.RedMaskSize)-1  )) << modeInfo.RedFieldPosition;
+    G = ((g >> (8 - modeInfo.GreenMaskSize)) & ((1UL<<modeInfo.GreenMaskSize)-1)) << modeInfo.GreenFieldPosition;
+    B = ((b >> (8 - modeInfo.BlueMaskSize )) & ((1UL<<modeInfo.BlueMaskSize)-1 )) << modeInfo.BlueFieldPosition;
+
+    return (R | G | B);
 }
 
   /*
@@ -1499,5 +1526,102 @@ void gfx_FillRect32 (long x1, long y1, long x2, long y2, uint32_t color)
   asm ("  popl %edi");
   asm ("  popl %esi");
 
+}
+
+static int open_bmp(char *file)
+{
+	typedef unsigned long DWORD;
+	typedef unsigned long LONG;
+	typedef unsigned short WORD;
+	struct { /* bmfh */ 
+			WORD bfType;
+			DWORD bfSize; 
+			DWORD bfReserved1; 
+			DWORD bfOffBits;
+		} __attribute__ ((packed)) bmfh;
+	struct { /* bmih */ 
+		DWORD biSize; 
+		LONG biWidth; 
+		LONG biHeight; 
+		WORD biPlanes; 
+		WORD biBitCount; 
+		DWORD biCompression; 
+		DWORD biSizeImage; 
+		LONG biXPelsPerMeter; 
+		LONG biYPelsPerMeter; 
+		DWORD biClrUsed; 
+		DWORD biClrImportant;
+	} __attribute__ ((packed)) bmih;
+	unsigned long modeLineSize;
+	unsigned char *mode_ptr;
+	if (!open(file))
+		return 0;
+	if (! read((unsigned long long)(unsigned int)&bmfh,sizeof(bmfh),GRUB_READ) || bmfh.bfType != 0x4d42)
+	{
+		close();
+		return !printf("Err: fil");
+	}
+	if (! read((unsigned long long)(unsigned int)&bmih,sizeof(bmih),GRUB_READ))
+	{
+		close();
+		return !printf("Error:read1\n");
+	}
+	uint16_t*	modeList = (uint16_t*)drvInfo.VideoModePtr;
+	uint16_t mode;
+	printf("Info: %dX%dX%d\n",bmih.biWidth,bmih.biHeight,bmih.biBitCount);
+	printf("BMP.size: %d\n",bmfh.bfSize);
+	while ((mode = *modeList++) != 0xFFFF)
+	{
+		if (! GetModeInfo (mode) || 
+			modeInfo.XResolution != bmih.biWidth
+		|| modeInfo.YResolution != bmih.biHeight
+		|| modeInfo.BitsPerPixel < bmih.biBitCount)
+			continue;
+		if (! SetMode (mode))
+		{
+			printf( "VBE mode %4x not supported\n", mode);
+		}
+		mode_ptr = (unsigned char*)modeInfo.PhysBasePtr;
+		modeLineSize = modeInfo.BytesPerScanline;
+		break;
+	}
+
+	if (mode == 0xffff)
+	{
+		printf("not supported!");
+		close();
+		getkey();
+		return 0;
+	}
+	unsigned int LineSize=(bmih.biWidth*(bmih.biBitCount>>3)+3)&~3;
+	char *buff=malloc(bmfh.bfSize);
+	int x = 0,y = bmih.biHeight-1;
+	char *p,*p1;
+	if (!read((unsigned long long)(unsigned int)buff,bmfh.bfSize,GRUB_READ))
+	{
+		close();
+		return 0;
+	}
+	close();
+	p = buff;
+	vbe_flags.img = malloc(modeInfo.BytesPerScanline*modeInfo.YResolution);
+	for(y=bmih.biHeight-1;y>=0;--y)
+	{
+		p1 = vbe_flags.img + modeLineSize * y;
+		for(x=0;x<bmih.biWidth;++x)
+		{
+			*p1++=*p++;
+			*p1++=*p++;
+			*p1++=*p++;
+			if (modeInfo.BitsPerPixel==32)
+				*++p1;
+		}
+		p = buff +(bmih.biHeight-y)*LineSize;
+	}
+	free(buff);
+//	memmove(mode_ptr,vbe_flags.img,bmfh.bfSize);
+//	getkey();
+//	CloseMode();
+	vbe_flags.mode = mode;
 }
 

@@ -141,7 +141,7 @@ typedef enum
 
 #define graphics_inited ((*(const int **)0x8304)[23])
 #define VARIABLE_GRAPHICS ((char *)(*(int ***)0x8304)[24])
-#define font8x16 ((unsigned char *)(*(int ***)0x8304)[25])
+#define font8x16 ((*(char ***)0x8304)[25])
 #define fontx ((*(int **)0x8304)[26])
 #define fonty ((*(int **)0x8304)[27])
 #define graphics_CURSOR ((*(int **)0x8304)[28])
