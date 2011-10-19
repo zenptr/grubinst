@@ -118,18 +118,15 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
 int GetModeInfo (uint16_t mode);
 int SetMode (uint16_t mode);
 void CloseMode ();
-uint32_t EncodePixel (uint8_t r, uint8_t g, uint8_t b);
 
 void gfx_Clear8  (uint32_t color);
 void gfx_Clear16 (uint32_t color);
 void gfx_Clear24 (uint32_t color);
 void gfx_Clear32 (uint32_t color);
 void SetPixel (long x, long y, uint32_t color);
-void gfx_FillRect  (long x1, long y1, long x2, long y2, uint32_t color);
-void gfx_FillRect8  (long x1, long y1, long x2, long y2, uint32_t color);
-void gfx_FillRect16 (long x1, long y1, long x2, long y2, uint32_t color);
-void gfx_FillRect24 (long x1, long y1, long x2, long y2, uint32_t color);
-void gfx_FillRect32 (long x1, long y1, long x2, long y2, uint32_t color);
+static void (*gfx_FillRect)(long x1, long y1, long x2, long y2, uint32_t color);
+static void gfx_FillRect24 (long x1, long y1, long x2, long y2, uint32_t color);
+static void gfx_FillRect32 (long x1, long y1, long x2, long y2, uint32_t color);
 
 /****************************************/
 /* All global variables must be static! */
@@ -139,6 +136,7 @@ static VBEDriverInfo_t drvInfo;
 static VBEModeInfo_t modeInfo;
 static uint32_t l_pixel;
 
+void SetPixelBG (long x,long y,int a);
 static int get_font(int flags);
 static int _INT10_(uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx,uint32_t es,uint32_t edi);
 static int vbe_init(int mode);
@@ -149,6 +147,7 @@ static int vbe_getxy(void);
 static void vbe_scroll(void);
 static void vbe_putchar (unsigned int c);
 static int vbe_setcursor (int on);
+static void vbe_cursor(int on);
 static int vbe_current_color = -1;
 static int vbe_standard_color = -1;
 static int vbe_normal_color = 0x55ffff;
@@ -163,8 +162,10 @@ static struct
 {
 	unsigned short mode;
 	unsigned short cursor;
-	char *img;
-} vbe_flags = {0,1,NULL};
+	unsigned char *image;
+	unsigned long BytesToLFB;
+	unsigned long BytesPerChar;
+} vbe_flags = {0,1,NULL,0,0};
 
 static int vbe_vfont(char *file);
 static unsigned vfont_size=0;
@@ -292,152 +293,16 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 			getkey();
 			return 0;
 		}
-		current_term = &vesa;
+
 		vesa.chars_per_line = modeInfo.XResolution>>3;
 		vesa.max_lines = modeInfo.YResolution>>4;
-		if (vbe_flags.img)
-			memmove((char*)modeInfo.PhysBasePtr,vbe_flags.img,modeInfo.YResolution*modeInfo.BytesPerScanline);
-		printf("%dx%dx%d,%dx%d\n",modeInfo.XResolution,modeInfo.YResolution,modeInfo.BitsPerPixel,vesa.chars_per_line,vesa.max_lines);
+		current_term = &vesa;
+		if (vbe_flags.image)
+			memmove((char*)modeInfo.PhysBasePtr,vbe_flags.image,modeInfo.YResolution*modeInfo.BytesPerScanline);
+		printf("VBE for GRUB4DOS Current Mode: %dx%dx%d,%dx%d\n",modeInfo.XResolution,modeInfo.YResolution,modeInfo.BitsPerPixel,vesa.chars_per_line,vesa.max_lines);
 		getkey();
-		vbe_cls();
-//		memmove((unsigned char*)modeInfo.PhysBasePtr,vbe_flags.img,204800);
 		return 1;
 	}
-
-  printf( "Signature: '%c%c%c%c'\n",
-    drvInfo.VBESignature[0], drvInfo.VBESignature[1],
-    drvInfo.VBESignature[2], drvInfo.VBESignature[3] );
-
-  printf( "Version: %X.%X\n",
-    (drvInfo.VBEVersion >> 8), (drvInfo.VBEVersion & 0xFF) );
-
-  printf( "OEM String: '%s'\n", (char*)drvInfo.OEMStringPtr );
-
-  printf( "Capabilities: %08X\n", drvInfo.Capabilities );
-
-  if( drvInfo.Capabilities & VBE_CAPS_DAC8 )
-    printf( "  * DAC registers switchable to 8-Bits\n" );
-  else
-    printf( "  * DAC registers fixed at 6-Bits\n" );
-
-  if( drvInfo.Capabilities & VBE_CAPS_NOTVGA )
-    printf( "  * Video card is not VGA compatible\n" );
-
-  if( drvInfo.Capabilities & VBE_CAPS_BLANKFN9 )
-    printf( "  * Use Blank Bit in Function 09h\n" );
-
-  printf( "Video Memory: %u\n", drvInfo.TotalMemory * 64 );
-
-  if( drvInfo.VBEVersion >= 0x0200 )
-  {
-    printf( "OEM Soft Rev: %04X\n", drvInfo.OemSoftwareRev );
-
-    if( drvInfo.OemVendorNamePtr )
-      printf( "  OEM Vendor: '%s'\n", (char*)drvInfo.OemVendorNamePtr );
-
-    if( drvInfo.OemProductNamePtr )
-      printf( " OEM Product: '%s'\n", (char*)drvInfo.OemProductNamePtr );
-
-    if( drvInfo.OemProductRevPtr )
-      printf( "OEM Revision: '%s'\n", (char*)drvInfo.OemProductRevPtr );
-  }
-
-  // Display available 8/15/16/24/32-BPP modes
-  printf( "\nAvailable Modes:" );
-
-#if 0
-  modeList = (uint16_t*)drvInfo.VideoModePtr;
-
-  while ((mode = *modeList++) != 0xFFFF)
-  {
-    if (! GetModeInfo (mode))
-	continue;
-    switch (modeInfo.BitsPerPixel)
-    {
-    case 8:
-    case 15:
-    case 16:
-    case 24:
-    case 32:
-          printf (" %X", mode);
-    }
-  }
-#else
-  builtin_cmd("vbeprobe","",0xff);
-#endif
-  printf ("\nPress any key to test each mode...\r");
-  getkey();
-  modeList = (uint16_t*)drvInfo.VideoModePtr;
-	current_term = &vesa;
-
-  while ((mode = *modeList++) != 0xFFFF)
-  {
-    if (! GetModeInfo (mode))
-	continue;
-    switch (modeInfo.BitsPerPixel)
-    {
-    case 8:
-    case 15:
-    case 16:
-    case 24:
-    case 32:
-	if (! SetMode (mode))
-	{
-	    printf( "VBE mode %4x not supported\n", mode);
-	    getkey();
-	    break;
-	}
-	fontx=0,fonty=0;
-	vesa.chars_per_line = modeInfo.XResolution>>3;
-	vesa.max_lines = modeInfo.YResolution>>4;
-	demo1_Run();
-	printf ("mode=%X. %dx%dx%d, %sBase=%X\n"
-		"ModeAttributes=%X\n"
-		"MemoryModel=%X\n"
-		"MaskSize=%d:%d:%d:%d\n"
-		"FieldPos=%d:%d:%d:%d\n"
-		"LinMaskSize=%d:%d:%d:%d\n"
-		"LinFieldPos=%d:%d:%d:%d\n"
-		"BytesPerScanline=%d\n"
-		"Press any key to continue...\n",
-		mode,
-		modeInfo.XResolution,
-		modeInfo.YResolution,
-		modeInfo.BitsPerPixel,
-		(modeInfo.ModeAttributes & 0x10)? "":"Text",
-		modeInfo.PhysBasePtr,
-		modeInfo.ModeAttributes,
-		modeInfo.MemoryModel,
-		modeInfo.RedMaskSize,
-		modeInfo.GreenMaskSize,
-		modeInfo.BlueMaskSize,
-		modeInfo.RsvdMaskSize,
-		modeInfo.RedFieldPosition,
-		modeInfo.GreenFieldPosition,
-		modeInfo.BlueFieldPosition,
-		modeInfo.RsvdFieldPosition,
-		modeInfo.LinRedMaskSize,
-		modeInfo.LinGreenMaskSize,
-		modeInfo.LinBlueMaskSize,
-		modeInfo.LinRsvdMaskSize,
-		modeInfo.LinRedFieldPosition,
-		modeInfo.LinGreenFieldPosition,
-		modeInfo.LinBlueFieldPosition,
-		modeInfo.LinRsvdFieldPosition,
-		modeInfo.BytesPerScanline
-	);
-	getkey();
-	CloseMode ();
-	break;
-    default:
-	printf ("mode=%X, not 8/15/16/24/32-BPP\nPress any key to continue...\n", mode);
-	getkey();
-	break;
-    }
-  }
-	if (pre_term->STARTUP)
-		pre_term->STARTUP();
-	current_term = pre_term;
 	return 0;
 }
 
@@ -472,47 +337,70 @@ static int _INT10_(uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx,uint32_t 
 {
 	struct realmode_regs int_regs = {edi,0,0,-1,ebx,edx,ecx,eax,-1,-1,es,-1,-1,0xFFFF10CD,-1,-1};
 	realmode_run((long)&int_regs);
-	return int_regs.eax;
+	return (unsigned short)int_regs.eax;
 }
 
 static int vbe_setcursor (int on)
 {
 	vbe_flags.cursor = on;
+	vbe_cursor(on);
 	return 0;
 }
 
 static int vbe_init(int mode)
 {
-	if (!mode)
-	{
-		mode = vbe_flags.mode;
-	}
-	if (!GetModeInfo(mode) || !SetMode (mode))
-		return 0;
-	vbe_flags.mode = mode;
-	fontx=0,fonty=0;
-	vesa.chars_per_line = modeInfo.XResolution>>3;
-	vesa.max_lines = modeInfo.YResolution>>4;
-	return 1;
+   if (!mode)
+   {
+      mode = vbe_flags.mode;
+   }
+   if (!GetModeInfo(mode) || !SetMode (mode))
+      return 0;
+   vbe_flags.mode = mode;
+   vbe_flags.BytesPerChar = modeInfo.BitsPerPixel>>3;
+   fontx=0,fonty=0;
+   vesa.chars_per_line = modeInfo.XResolution>>3;
+   vesa.max_lines = modeInfo.YResolution>>4;
+   return 1;
 }
 
 static void vbe_end(void)
 {
-	if (vbe_flags.img)
-		free(vbe_flags.img);
+	if (vbe_flags.image)
+		free(vbe_flags.image);
 	CloseMode ();
 }
 
 static void vbe_cls(void)
 {
-	uint8_t* l_lfb = (uint8_t*)modeInfo.PhysBasePtr;
-	uint32_t size = modeInfo.YResolution * modeInfo.BytesPerScanline;
-	while(size--)
-	{
-		*l_lfb++=0;
+   if (vbe_flags.image)
+      memmove((char*)modeInfo.PhysBasePtr,vbe_flags.image,modeInfo.YResolution * modeInfo.BytesPerScanline);
+   else
+   {
+      uint32_t* l_lfb = (uint32_t*)modeInfo.PhysBasePtr;
+      uint32_t size = (modeInfo.YResolution * modeInfo.BytesPerScanline)>>2;
+      while(size--)
+      {
+         *l_lfb++=0;
+      }
 	}
 	fontx = 0;
 	fonty = 0;
+}
+
+static void vbe_cursor(int on)
+{
+   if (on)
+      gfx_FillRect (fontx<<3,(fonty<<4)+15,(fontx+1)<<3,(fonty+1)<<4, vbe_cursor_color);
+   else if (vbe_flags.image)
+   {
+      uint8_t *lfb,*bg;
+      lfb = (uint8_t*)modeInfo.PhysBasePtr + ((fonty<<4)+15)*modeInfo.BytesPerScanline + (fontx<<3)*vbe_flags.BytesPerChar;
+      bg = lfb - vbe_flags.BytesToLFB;
+      memmove(lfb,bg,vbe_flags.BytesPerChar+1<<3);
+      memmove(lfb+modeInfo.BytesPerScanline,bg+modeInfo.BytesPerScanline,vbe_flags.BytesPerChar+1<<3);
+   }
+   else
+      gfx_FillRect (fontx<<3,(fonty<<4)+15,(fontx+1)<<3,(fonty+1)<<4, 0);
 }
 
 static void vbe_gotoxy(int x, int y)
@@ -522,13 +410,16 @@ static void vbe_gotoxy(int x, int y)
 		x = vesa.chars_per_line;
 	if (y > vesa.max_lines)
 		y = vesa.max_lines;
-	if (vbe_flags.cursor)
+   if (vbe_flags.cursor)
 	{
-		gfx_FillRect (fontx<<3,(fonty<<4)+15,(fontx+1)<<3,(fonty+1)<<4, 0);
-		gfx_FillRect (x<<3,(y<<4)+15,(x+1)<<3,(fonty+1)<<4, vbe_cursor_color);
+		vbe_cursor(0);
 	}
 	fontx = x;
 	fonty = y;
+	if (vbe_flags.cursor)
+	{
+		vbe_cursor(1);
+	}
 	return;
 }
 
@@ -539,20 +430,56 @@ static char inb(unsigned short port)
 	return ret_val;
 }
 
+void SetPixelBG(long x,long y,int a)
+{
+   uint8_t *lfb = (uint8_t*)modeInfo.PhysBasePtr + y*modeInfo.BytesPerScanline + x*vbe_flags.BytesPerChar;
+   if (vbe_flags.image)
+      *(unsigned long *)lfb = *(unsigned long *)(lfb - vbe_flags.BytesToLFB);
+   else
+      *(unsigned long *)lfb = 0;
+   if (a)
+      *(unsigned long *)lfb = ~*(unsigned long *)lfb;
+}
+
 static void vbe_scroll(void)
 {
-	uint8_t* l_lfb = (uint8_t*)modeInfo.PhysBasePtr;
+	uint8_t* l_lfb = (uint8_t*)modeInfo.PhysBasePtr ;
 
 	if(l_lfb)
 	{
 		uint32_t i,j;
 		j = modeInfo.BytesPerScanline<<4;
-		for (i=0;i<fonty;++i)
+		if (vbe_flags.image)
 		{
-			//while (!(inb(0x3da) & 8))
-			//	;
-			memmove(l_lfb,l_lfb+j,j);
-			l_lfb+=j;
+         uint8_t *ToBG,*FromBG,*l_lfb1;
+         int k;
+         ToBG = l_lfb - vbe_flags.BytesToLFB;
+         l_lfb1 = l_lfb + j;
+         FromBG = l_lfb1 - vbe_flags.BytesToLFB;
+         for (i=0;i<fonty;++i)
+         {
+            memmove(l_lfb,ToBG,j);
+            for (k = 0;k<modeInfo.BytesPerScanline<<2;++k)
+            {
+               if (*(unsigned long*)&l_lfb1[k<<2] != *(unsigned long*)&FromBG[k<<2])
+               {
+                  *(unsigned long*)&l_lfb[k<<2] = *(unsigned long*)&l_lfb1[k<<2];
+               }
+            }
+            l_lfb += j;
+            ToBG += j;
+            FromBG +=j;
+            l_lfb1 +=j;
+         }
+         memmove(l_lfb,ToBG,j);
+		}
+		else
+		{
+         for (i=0;i<fonty;++i)
+         {
+            memmove(l_lfb,l_lfb+j,j);
+            l_lfb+=j;
+         }
 		}
 	}
 	return;
@@ -587,13 +514,13 @@ static void vbe_putchar (unsigned int c)
 	else if ((char)c == '\r') {
 		return vbe_gotoxy(0, fonty);
 	}
-
+   vbe_cursor(0);
 	char *cha = font8x16 + ((unsigned char)c<<4);
 	int i,j;
 
 	if (vfont_size)
 	{
-		if ((unsigned char)c >= '\x80' && (pre_ch - (unsigned char)c) == '\x40' && (unsigned char)c < 0x80+vfont_size)
+		if ((unsigned char)c >= 0x80 && (pre_ch - (unsigned char)c) == 0x40 && (unsigned char)c < 0x80+vfont_size)
 		{
 			uint8_t ch = pre_ch;
 			if (!fontx && fonty)
@@ -613,7 +540,7 @@ static void vbe_putchar (unsigned int c)
 					if (cha[j] & mask[i])
 						SetPixel (fontx*8+i,fonty*16+j,vbe_current_color);
 					else
-						SetPixel (fontx*8+i,fonty*16+j,0);
+						SetPixelBG (fontx*8+i,fonty*16+j,c>>16);
 				}
 			}
 			++fontx;
@@ -628,7 +555,7 @@ static void vbe_putchar (unsigned int c)
 			if (cha[j] & mask[i])
 				SetPixel (fontx*8+i,fonty*16+j,vbe_current_color);
 			else
-				SetPixel (fontx*8+i,fonty*16+j,0);
+				SetPixelBG (fontx*8+i,fonty*16+j,c>>16);
 		}
 	}
 
@@ -681,25 +608,6 @@ static void vbe_putchar (unsigned int c)
 //	}
 //}
 
-
-void
-gfx_FillRect (long p_x1, long p_y1, long p_x2, long p_y2, uint32_t p_pixel)
-{
-	switch(modeInfo.BitsPerPixel)
-	{
-		case 8:
-			return gfx_FillRect8 (p_x1, p_y1, p_x2, p_y2, p_pixel);
-		case 15:
-		case 16:
-			return gfx_FillRect16 (p_x1, p_y1, p_x2, p_y2, p_pixel);
-		case 24:
-			return gfx_FillRect24 (p_x1, p_y1, p_x2, p_y2, p_pixel);
-		case 32:
-			return gfx_FillRect32 (p_x1, p_y1, p_x2, p_y2, p_pixel);
-	};
-}
-
-
 static void vbe_setcolorstate (color_state state)
 {
 	switch (state)
@@ -723,7 +631,7 @@ static void vbe_setcolorstate (color_state state)
 			vbe_current_color = vbe_standard_color;
 			break;
 	}
-	vbe_current_color = EncodePixel(vbe_current_color>>16,vbe_current_color>>8,vbe_current_color);
+//	vbe_current_color = EncodePixel(vbe_current_color>>16,vbe_current_color>>8,vbe_current_color);
 	vbe_color_state = state;
 }
 
@@ -732,8 +640,10 @@ static void vbe_setcolor (int normal_color, int highlight_color, int helptext_co
 {
 	if (normal_color == -1)
 	{
-		_INT10_(0x1010,0,highlight_color,highlight_color>>8,-1,0);
-		vbe_cursor_color = EncodePixel(helptext_color>>16,helptext_color>>8,helptext_color);
+		vbe_standard_color = highlight_color;
+		if (vbe_color_state == COLOR_STATE_STANDARD)
+         vbe_current_color = vbe_standard_color;
+		vbe_cursor_color = helptext_color;
 		return;
 	}
 	vbe_normal_color = normal_color;
@@ -741,47 +651,6 @@ static void vbe_setcolor (int normal_color, int highlight_color, int helptext_co
 	vbe_helptext_color = helptext_color;
 	vbe_heading_color = heading_color;
 	vbe_setcolorstate (vbe_color_state);
-}
-
-void demo1_Run()
-{
-    l_pixel = EncodePixel (64, 128, 255);
-
-    if (modeInfo.BitsPerPixel == 8)
-    {
-        gfx_Clear8 (l_pixel);
-
-        l_pixel = EncodePixel (16, 32, 64);
-        gfx_FillRect8 (modeInfo.XResolution / 2 - 100, modeInfo.YResolution / 2 - 100, modeInfo.XResolution / 2 + 100, modeInfo.YResolution / 2 + 100, l_pixel);
-    } else if (modeInfo.BitsPerPixel == 15 || modeInfo.BitsPerPixel == 16)
-    {
-        gfx_Clear16 (l_pixel);
-
-        l_pixel = EncodePixel (16, 32, 64);
-        gfx_FillRect16 (modeInfo.XResolution / 2 - 100, modeInfo.YResolution / 2 - 100, modeInfo.XResolution / 2 + 100, modeInfo.YResolution / 2 + 100, l_pixel);
-    } else if (modeInfo.BitsPerPixel == 24)
-    {
-        gfx_Clear24 (l_pixel);
-
-        l_pixel = EncodePixel (16, 32, 64);
-        gfx_FillRect24 (modeInfo.XResolution / 2 - 100, modeInfo.YResolution / 2 - 100, modeInfo.XResolution / 2 + 100, modeInfo.YResolution / 2 + 100, l_pixel);
-    } else {
-        gfx_Clear32 (l_pixel);
-
-        l_pixel = EncodePixel (16, 32, 64);
-        gfx_FillRect32 (modeInfo.XResolution / 2 - 100, modeInfo.YResolution / 2 - 100, modeInfo.XResolution / 2 + 100, modeInfo.YResolution / 2 + 100, l_pixel);
-    }
-    l_pixel = EncodePixel (128, 64, 32);
-    SetPixel (modeInfo.XResolution / 2 - 2, modeInfo.YResolution / 2 + 0, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 - 1, modeInfo.YResolution / 2 + 0, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 0, modeInfo.YResolution / 2 + 0, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 1, modeInfo.YResolution / 2 + 0, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 2, modeInfo.YResolution / 2 + 0, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 0, modeInfo.YResolution / 2 - 2, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 0, modeInfo.YResolution / 2 - 1, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 0, modeInfo.YResolution / 2 + 0, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 0, modeInfo.YResolution / 2 + 1, l_pixel);
-    SetPixel (modeInfo.XResolution / 2 + 0, modeInfo.YResolution / 2 + 2, l_pixel);
 }
 
 static uint32_t sys_RM16ToFlat32( uint32_t p_RMSegOfs )
@@ -799,35 +668,8 @@ int GetDriverInfo ()
     di = (VBEDriverInfo_t*)0x20000;
     memset (di, 0, 1024);
     memcpy (di, l_vbe2Sig, 4);
-#if 0
-    struct realmode_regs Regs;
-
-
-
-
-      Regs.eax = 0x4F00;
-      Regs.es  = 0x2000;
-      Regs.edi = 0;
-        Regs.ebx = 0;
-        Regs.ecx = 0;
-        Regs.edx = 0;
-	Regs.esi = 0;
-	Regs.ebp = 0;
-	Regs.esp = -1;
-	Regs.ss = -1;
-	Regs.ds = -1;
-	Regs.fs = -1;
-	Regs.gs = -1;
-	Regs.eflags = -1;
-	Regs.cs = -1;
-	Regs.eip = 0xFFFF10CD;
-
-        realmode_run((long)&Regs);
-
-      if( (((uint16_t)Regs.eax) == 0x004F)
-#else
+	// eax=0x4f00 es=0x2000 edi=0
 	   if ((_INT10_(0x4F00,0,0,0,0x2000,0) == 0x4f)
-#endif
        &&
         (memcmp/*strncmp*/(di->VBESignature, "VESA", 4) == 0) &&
         (di->VBEVersion >= 0x200) )
@@ -857,31 +699,8 @@ int GetModeInfo (uint16_t mode)
 
     mi = (VBEModeInfo_t*)(0x20000 + 1024);
     memset (mi, 0, 1024);
-#if 0
-   struct realmode_regs Regs;
-    Regs.eax = 0x4F01;
-    Regs.ecx = mode;
-    Regs.es  = 0x2000;
-    Regs.edi = 1024;
-        Regs.ebx = 0;
-        Regs.edx = 0;
-	Regs.esi = 0;
-	Regs.ebp = 0;
-	Regs.esp = -1;
-	Regs.ss = -1;
-	Regs.ds = -1;
-	Regs.fs = -1;
-	Regs.gs = -1;
-	Regs.eflags = -1;
-	Regs.cs = -1;
-	Regs.eip = 0xFFFF10CD;
-
-        realmode_run((long)&Regs);
-
-    if (((uint16_t)Regs.eax) != 0x004F)
-#else
+	//eax=0x4f01 ecx=mode,es=0x2000,edi=1024
 	if(_INT10_(0x4F01,0,mode,0,0x2000,1024) != 0x004F)
-#endif
       return 0;
 
     // Mode must be supported
@@ -895,176 +714,24 @@ int GetModeInfo (uint16_t mode)
     if (mi->PhysBasePtr == 0)
       return 0;
 
-    if (mi->MemoryModel == 4 && mi->BitsPerPixel == 8)
-    {
-	/* simulate Direct Color of 3:3:2 */
-	mi->RedMaskSize = 3;
-	mi->GreenMaskSize = 3;
-	mi->BlueMaskSize = 2;
-	mi->RsvdMaskSize = 0;
-
-	mi->RedFieldPosition = 5;
-	mi->GreenFieldPosition = 2;
-	mi->BlueFieldPosition = 0;
-	mi->RsvdFieldPosition = 0;
-    }
     memcpy (&modeInfo, mi, sizeof(VBEModeInfo_t));
     return 1;
 }
 
   /*
-   *  void SetPal (*pal);
-   *
-   *  Purpose:
-   *    Sets internal palette from an array of R,G,B,A values.
-   *
-   *  Returns:
-   *    Nothing
-   */
-
-static void SetPal (char* pal)
-{
-  asm ("  pushl %esi");
-  asm ("  cld");
-  asm ("  movl    %0, %%esi" : :"m"(pal));
-  asm ("  testl   %esi, %esi");
-  asm ("  jz      SetPal_Error");
-  
-  asm ("  movw    $0x3C8, %dx");
-  asm ("  xorb    %al, %al");
-  asm ("  movl    $256, %ecx");
-  asm ("  outb    %al, %dx");
-  
-  asm ("  movw    $0x3C9, %dx");
-  
-  asm ("SetPal_Loop:");
-  asm ("  lodsb");
-  asm ("  shrb    $2, %al");
-  asm ("  outb    %al, %dx");
-  
-  asm ("  lodsb");
-  asm ("  shrb    $2, %al");
-  asm ("  outb    %al, %dx");
-  
-  asm ("  lodsb");
-  asm ("  shrb    $2, %al");
-  asm ("  outb    %al, %dx");
-  
-  asm ("  incl    %esi");
-  
-  asm ("  loop    SetPal_Loop");
-  
-  asm ("SetPal_Error:");
-  asm ("  popl %esi");
-}
-
-  /*
    *    Set VBE LFB display mode. Ignores banked display modes.
    */
-
 int SetMode (uint16_t mode)
 {
-	//struct realmode_regs Regs;
-
-	// Already validates Mode and LFB support
-
-	//Regs.eax = 0x4F02;
-	//Regs.ebx = mode | 0x4000; // 0x4000 = LFB flag
-	//Regs.ecx = 0;
-	//Regs.edx = 0;
-	//Regs.esi = 0;
-	//Regs.edi = 0;
-	//Regs.ebp = 0;
-	//Regs.esp = -1;
-	//Regs.ss = -1;
-	//Regs.ds = -1;
-	//Regs.es = -1;
-	//Regs.fs = -1;
-	//Regs.gs = -1;
-	//Regs.eflags = -1;
-	//Regs.cs = -1;
-	//Regs.eip = 0xFFFF10CD;
-
-	//realmode_run((long)&Regs);
-
-	//if (((uint16_t)Regs.eax) != 0x004F)
-	if (_INT10_(0x4F02,0x4000|mode,0,0,-1,0) != 0x004F)
-		return 0;
-
-	if (modeInfo.MemoryModel == 4 && modeInfo.BitsPerPixel == 8)
-	{
-		/* Using BIOS to set palette to simulate Direct Color of 3:3:2 */
-		struct PaletteEntry
-		{
-			uint8_t Blue;	// Blue channel value (6 or 8 bits)
-			uint8_t Green;	// Green channel value (6 or 8 bits)
-			uint8_t Red;	// Red channel value(6 or 8 bits)
-			uint8_t Alignment;	// DWORD alignment byte (unused)
-		} __attribute__ ((packed));
-
-		int i;
-		struct PaletteEntry palette[256];
-		// Note that the palette array is passed on the stack. So it is
-		// accessible in realmode.
-
-		for (i = 0; i < 256; i++)
-		{
-			int r, g, b;
-			r = (i >> 5)*37;
-			g = ((i >> 2) & 7)*37;
-			b = (i & 3)*85;
-			palette[i].Blue = b;
-			palette[i].Green = g>255?255:g;
-			palette[i].Red = r>255?255:r;
-		}
-		//Regs.eax = 0x4F09;
-		//Regs.ebx = 0;	// BL=0 Set Palette Data
-		//Regs.ecx = 256;	// Number of palette registers to update
-		//Regs.edx = 0;	// First of the palette registers to update (start)
-		//Regs.esi = 0;
-		//Regs.edi = (uint32_t)palette;	// Table of palette values
-		//Regs.ebp = 0;
-		//Regs.esp = -1;
-		//Regs.ss = -1;
-		//Regs.ds = -1;
-		//Regs.es = 0;	// ES:DI points to palette entries.
-		//Regs.fs = -1;
-		//Regs.gs = -1;
-		//Regs.eflags = -1;
-		//Regs.cs = -1;
-		//Regs.eip = 0xFFFF10CD;
-
-		//	  realmode_run((long)&Regs);
-
-		//if (((uint16_t)Regs.eax) != 0x004F)
-		if (_INT10_(0x4F09,0,256,0,0,(uint32_t)palette) != 0x004F)
-		{
-			struct
-			{
-			 uint8_t r;
-			 uint8_t g;
-			 uint8_t b;
-			 uint8_t a;
-			} __attribute__ ((packed)) pal[256];
-
-			for (i = 0; i < 256; i++)
-			{
-				int r, g, b;
-				r = (i >> 5)*37;
-				g = ((i >> 2) & 7)*37;
-				b = (i & 3)*85;
-				pal[i].r = r>255?255:r;
-				pal[i].g = g>255?255:g;
-				pal[i].b = b;
-			}
-			pal[0].r = 0;
-			pal[0].g = 33;
-			pal[0].b = 99;
-			SetPal ((char*)pal);
-			return 2;
-		}
-	}
-	return 1;
+   if (modeInfo.BitsPerPixel == 24)
+      gfx_FillRect = gfx_FillRect24;
+   else if (modeInfo.BitsPerPixel == 32)
+      gfx_FillRect = gfx_FillRect32;
+   else
+      return 0;
+   if (_INT10_(0x4F02,0x4000|mode,0,0,-1,0) != 0x004F)
+      return 0;
+   return 1;
 }
 
 void CloseMode ()
@@ -1073,60 +740,8 @@ void CloseMode ()
 }
 
   /*
-   *  uint32_t EncodePixel (r, g, b)
-   *
-   *  Purpose:
-   *    Encodes R, G, B triplet into generic 32-bit pixel format.
-   *    Intended for 15/16/24/32-BPP, 8-BPP needs color matching.
-   *
-   *  Returns:
-   *    Encoded pixel on success
-   */
-uint32_t EncodePixel (uint8_t r, uint8_t g, uint8_t b)
-{
-    uint32_t R, G, B;
-
-    R = ((r >> (8 - modeInfo.RedMaskSize  )) & ((1UL<<modeInfo.RedMaskSize)-1  )) << modeInfo.RedFieldPosition;
-    G = ((g >> (8 - modeInfo.GreenMaskSize)) & ((1UL<<modeInfo.GreenMaskSize)-1)) << modeInfo.GreenFieldPosition;
-    B = ((b >> (8 - modeInfo.BlueMaskSize )) & ((1UL<<modeInfo.BlueMaskSize)-1 )) << modeInfo.BlueFieldPosition;
-
-    return (R | G | B);
-}
-
-  /*
    *    Clears the entire LFB
    */
-void gfx_Clear8 (uint32_t color)
-{
-    uint32_t lfbsize = modeInfo.YResolution * modeInfo.BytesPerScanline;
-  asm ("  pushl %edi");
-  asm ("  cld");
-  asm ("  movl    %0, %%edi" : :"m"(modeInfo.PhysBasePtr));
-  asm ("  movl    %0, %%ecx" : :"m"(lfbsize));
-  asm ("  movl    %0, %%eax" : :"m"(color));
-  asm ("  testl   %edi, %edi");
-  asm ("  jz      Clear8_Error");
-  asm ("  rep stosb");
-  asm ("Clear8_Error:");
-  asm ("  popl %edi");
-}
-
-void gfx_Clear16 (uint32_t color)
-{
-    uint32_t lfbsize = modeInfo.YResolution * modeInfo.BytesPerScanline;
-  asm ("  pushl %edi");
-  asm ("  cld");
-  asm ("  movl    %0, %%edi" : :"m"(modeInfo.PhysBasePtr));
-  asm ("  movl    %0, %%ecx" : :"m"(lfbsize));
-  asm ("  movl    %0, %%eax" : :"m"(color));
-  asm ("  testl   %edi, %edi");
-  asm ("  jz      Clear16_Error");
-  asm ("  shrl    $1, %ecx");
-  asm ("  rep stosw");
-  asm ("Clear16_Error:");
-  asm ("  popl %edi");
-}
-
 void gfx_Clear24 (uint32_t color)
 {
     uint32_t lfbsize = modeInfo.YResolution * modeInfo.BytesPerScanline;
@@ -1180,40 +795,28 @@ void gfx_Clear32 (uint32_t color)
 
 void SetPixel (long x, long y, uint32_t color)
 {
-    uint8_t* lfb;
+	uint8_t* lfb;
 
-    if (x < 0 || y < 0 || x >= modeInfo.XResolution || y >= modeInfo.YResolution)
-	return;
+	if (x < 0 || y < 0 || x >= modeInfo.XResolution || y >= modeInfo.YResolution)
+		return;
 
-    lfb = (uint8_t*)(modeInfo.PhysBasePtr + (y * modeInfo.BytesPerScanline) + (x * ((modeInfo.BitsPerPixel + 7) / 8)));
-
-    switch (modeInfo.BitsPerPixel)
-    {
-    case 8:
-		*lfb = (uint8_t)color;
-		break;
-    case 15:
-    case 16:
+	lfb = (uint8_t*)(modeInfo.PhysBasePtr + (y * modeInfo.BytesPerScanline) + (x * ((modeInfo.BitsPerPixel + 7) / 8)));
+	switch (modeInfo.BitsPerPixel)
+	{
+	case 24:
 		*(uint16_t *)lfb = (uint16_t)color;
-		break;
-    case 24:
-		*(uint16_t *)lfb = (uint16_t)color;
-		//lfb[0] = (uint8_t)(color >> 0);
-		//lfb[1] = (uint8_t)(color >> 8);
 		lfb[2] = (uint8_t)(color >> 16);
 		break;
-    case 32:
+	case 32:
 		*(uint32_t *)lfb = (uint32_t)color;
 		break;
-    }
-
+	}
 }
 
   /*
    *    Draws a solid rectangle from (x1, y1) to (x2, y2)
    */
-
-void gfx_FillRect8 (long p_x1, long p_y1, long p_x2, long p_y2, uint32_t color)
+static void gfx_FillRect24 (long x1, long y1, long x2, long y2, uint32_t color)
 {
     uint8_t* l_lfb;
     uint32_t l_width;
@@ -1226,160 +829,20 @@ void gfx_FillRect8 (long p_x1, long p_y1, long p_x2, long p_y2, uint32_t color)
 
     // Clip specified rectangle to context boundaries
     l_minx = 0;
-    if( p_x1 >= l_minx )
-      l_minx = p_x1;
+    if( x1 >= l_minx )
+      l_minx = x1;
 
     l_miny = 0;
-    if( p_y1 >= l_miny )
-      l_miny = p_y1;
+    if( y1 >= l_miny )
+      l_miny = y1;
 
     l_maxx = modeInfo.XResolution - 1;
-    if( p_x2 <= l_maxx )
-      l_maxx = p_x2;
+    if( x2 <= l_maxx )
+      l_maxx = x2;
 
     l_maxy = modeInfo.YResolution - 1;
-    if( p_y2 <= l_maxy )
-      l_maxy = p_y2;
-
-    // Validate boundaries
-    if( l_minx >= l_maxx )
-      return;
-
-    if( l_miny >= l_maxy )
-      return;
-
-    // Initialize loop variables
-    l_width  = (l_maxx - l_minx) + 1;
-    l_height = (l_maxy - l_miny) + 1;
-
-    l_skip   = modeInfo.BytesPerScanline - l_width;
-
-    // Calculate buffer offset
-    l_lfb = (uint8_t*)(modeInfo.PhysBasePtr + (l_miny * modeInfo.BytesPerScanline) + l_minx);
-
-    // Draw rectangle
-    //gfx_FillRect8_asm( l_lfb, l_skip, l_width, l_height, p_pixel );
-  asm ("  pushl %esi");
-  asm ("  pushl %edi");
-  asm ("  pushl %ebx");
-  asm ("  cld");
-  asm ("  movl    %0, %%edi" : :"m"(l_lfb));
-  asm ("  movl    %0, %%edx" : :"m"(l_skip));
-  asm ("  movl    %0, %%ecx" : :"m"(l_width));
-  asm ("  movl    %0, %%ebx" : :"m"(l_height));
-  asm ("  movl    %0, %%eax" : :"m"(color));
-  asm ("  testl   %edi, %edi");
-  asm ("  jz      FillRect8_Error");
-  asm ("  movl    %ecx, %esi");
-  asm ("FillRect8_Loop:");
-  asm ("  movl    %esi, %ecx");
-  asm ("  rep stosb");
-  asm ("  addl    %edx, %edi");
-  asm ("  decl    %ebx");
-  asm ("  jnz      FillRect8_Loop");
-  asm ("FillRect8_Error:");
-  asm ("  popl %ebx");
-  asm ("  popl %edi");
-  asm ("  popl %esi");
-}
-
-void gfx_FillRect16 (long p_x1, long p_y1, long p_x2, long p_y2, uint32_t color)
-{
-    uint16_t* l_lfb;
-    uint32_t  l_width;
-    uint32_t  l_height;
-    uint32_t  l_skip;
-    long   l_minx;
-    long   l_miny;
-    long   l_maxx;
-    long   l_maxy;
-
-    // Clip specified rectangle to context boundaries
-    l_minx = 0;
-    if( p_x1 >= l_minx )
-      l_minx = p_x1;
-
-    l_miny = 0;
-    if( p_y1 >= l_miny )
-      l_miny = p_y1;
-
-    l_maxx = modeInfo.XResolution - 1;
-    if( p_x2 <= l_maxx )
-      l_maxx = p_x2;
-
-    l_maxy = modeInfo.YResolution - 1;
-    if( p_y2 <= l_maxy )
-      l_maxy = p_y2;
-
-    // Validate boundaries
-    if( l_minx >= l_maxx )
-      return;
-
-    if( l_miny >= l_maxy )
-      return;
-
-    // Initialize loop variables
-    l_width  = (l_maxx - l_minx) + 1;
-    l_height = (l_maxy - l_miny) + 1;
-
-    l_skip   = modeInfo.BytesPerScanline - (l_width * 2);
-
-    // Calculate buffer offset
-    l_lfb = (uint16_t*)(modeInfo.PhysBasePtr + (l_miny * modeInfo.BytesPerScanline) + (l_minx * 2));
-
-    // Draw rectangle
-    //gfx_FillRect16_asm( l_lfb, l_skip, l_width, l_height, p_pixel );
-  asm ("  pushl %esi");
-  asm ("  pushl %edi");
-  asm ("  pushl %ebx");
-  asm ("  cld");
-  asm ("  movl    %0, %%edi" : :"m"(l_lfb));
-  asm ("  movl    %0, %%edx" : :"m"(l_skip));
-  asm ("  movl    %0, %%ecx" : :"m"(l_width));
-  asm ("  movl    %0, %%ebx" : :"m"(l_height));
-  asm ("  movl    %0, %%eax" : :"m"(color));
-  asm ("  testl   %edi, %edi");
-  asm ("  jz      FillRect16_Error");
-  asm ("  movl    %ecx, %esi");
-  asm ("FillRect16_Loop:");
-  asm ("  movl    %esi, %ecx");
-  asm ("  rep stosw");
-  asm ("  addl    %edx, %edi");
-  asm ("  decl    %ebx");
-  asm ("  jnz      FillRect16_Loop");
-  asm ("FillRect16_Error:");
-  asm ("  popl %ebx");
-  asm ("  popl %edi");
-  asm ("  popl %esi");
-}
-
-void gfx_FillRect24 (long p_x1, long p_y1, long p_x2, long p_y2, uint32_t color)
-{
-    uint8_t* l_lfb;
-    uint32_t l_width;
-    uint32_t l_height;
-    uint32_t l_skip;
-    long  l_minx;
-    long  l_miny;
-    long  l_maxx;
-    long  l_maxy;
-
-    // Clip specified rectangle to context boundaries
-    l_minx = 0;
-    if( p_x1 >= l_minx )
-      l_minx = p_x1;
-
-    l_miny = 0;
-    if( p_y1 >= l_miny )
-      l_miny = p_y1;
-
-    l_maxx = modeInfo.XResolution - 1;
-    if( p_x2 <= l_maxx )
-      l_maxx = p_x2;
-
-    l_maxy = modeInfo.YResolution - 1;
-    if( p_y2 <= l_maxy )
-      l_maxy = p_y2;
+    if( y2 <= l_maxy )
+      l_maxy = y2;
 
     // Validate boundaries
     if( l_minx >= l_maxx )
@@ -1445,19 +908,7 @@ void gfx_FillRect24 (long p_x1, long p_y1, long p_x2, long p_y2, uint32_t color)
   asm ("  popl %esi");
 }
 
-  /*
-   *  void gfx_FillRect32 (x1, y1, x2, y2, color)
-   *
-   *  Purpose:
-   *    Draws a solid 32-BPP rectangle from (x1, y1)
-   *    to (x2, y2) using specified pixel color,
-   *
-   *  Returns:
-   *    Nothing
-   */
-
-
-void gfx_FillRect32 (long x1, long y1, long x2, long y2, uint32_t color)
+static void gfx_FillRect32 (long x1, long y1, long x2, long y2, uint32_t color)
 {
     uint32_t* l_lfb;
     uint32_t  l_width;
@@ -1530,98 +981,109 @@ void gfx_FillRect32 (long x1, long y1, long x2, long y2, uint32_t color)
 
 static int open_bmp(char *file)
 {
-	typedef unsigned long DWORD;
-	typedef unsigned long LONG;
-	typedef unsigned short WORD;
-	struct { /* bmfh */ 
-			WORD bfType;
-			DWORD bfSize; 
-			DWORD bfReserved1; 
-			DWORD bfOffBits;
-		} __attribute__ ((packed)) bmfh;
-	struct { /* bmih */ 
-		DWORD biSize; 
-		LONG biWidth; 
-		LONG biHeight; 
-		WORD biPlanes; 
-		WORD biBitCount; 
-		DWORD biCompression; 
-		DWORD biSizeImage; 
-		LONG biXPelsPerMeter; 
-		LONG biYPelsPerMeter; 
-		DWORD biClrUsed; 
-		DWORD biClrImportant;
-	} __attribute__ ((packed)) bmih;
-	unsigned long modeLineSize;
-	unsigned char *mode_ptr;
-	if (!open(file))
-		return 0;
-	if (! read((unsigned long long)(unsigned int)&bmfh,sizeof(bmfh),GRUB_READ) || bmfh.bfType != 0x4d42)
-	{
-		close();
-		return !printf("Err: fil");
-	}
-	if (! read((unsigned long long)(unsigned int)&bmih,sizeof(bmih),GRUB_READ))
-	{
-		close();
-		return !printf("Error:read1\n");
-	}
-	uint16_t*	modeList = (uint16_t*)drvInfo.VideoModePtr;
-	uint16_t mode;
-	printf("Info: %dX%dX%d\n",bmih.biWidth,bmih.biHeight,bmih.biBitCount);
-	printf("BMP.size: %d\n",bmfh.bfSize);
-	while ((mode = *modeList++) != 0xFFFF)
-	{
-		if (! GetModeInfo (mode) || 
-			modeInfo.XResolution != bmih.biWidth
-		|| modeInfo.YResolution != bmih.biHeight
-		|| modeInfo.BitsPerPixel < bmih.biBitCount)
-			continue;
-		if (! SetMode (mode))
-		{
-			printf( "VBE mode %4x not supported\n", mode);
-		}
-		mode_ptr = (unsigned char*)modeInfo.PhysBasePtr;
-		modeLineSize = modeInfo.BytesPerScanline;
-		break;
-	}
+   typedef unsigned long DWORD;
+   typedef unsigned long LONG;
+   typedef unsigned short WORD;
+   struct { /* bmfh */ 
+         WORD bfType;
+         DWORD bfSize; 
+         DWORD bfReserved1; 
+         DWORD bfOffBits;
+      } __attribute__ ((packed)) bmfh;
+   struct { /* bmih */ 
+      DWORD biSize; 
+      LONG biWidth; 
+      LONG biHeight; 
+      WORD biPlanes; 
+      WORD biBitCount; 
+      DWORD biCompression; 
+      DWORD biSizeImage; 
+      LONG biXPelsPerMeter; 
+      LONG biYPelsPerMeter; 
+      DWORD biClrUsed; 
+      DWORD biClrImportant;
+   } __attribute__ ((packed)) bmih;
+   unsigned long modeLineSize;
+   unsigned char *mode_ptr;
+   if (!open(file))
+      return 0;
+   if (! read((unsigned long long)(unsigned int)&bmfh,sizeof(bmfh),GRUB_READ) || bmfh.bfType != 0x4d42)
+   {
+      close();
+      return !printf("Err: fil");
+   }
+   if (! read((unsigned long long)(unsigned int)&bmih,sizeof(bmih),GRUB_READ))
+   {
+      close();
+      return !printf("Error:read1\n");
+   }
+   uint16_t*	modeList = (uint16_t*)drvInfo.VideoModePtr;
+   uint16_t mode;
+   while ((mode = *modeList++) != 0xFFFF)
+   {
+      if (! GetModeInfo (mode) || 
+         modeInfo.XResolution != bmih.biWidth
+      || modeInfo.YResolution != bmih.biHeight
+      || modeInfo.BitsPerPixel < bmih.biBitCount)
+         continue;
+      if (! SetMode (mode))
+      {
+         printf( "VBE mode %4x not supported\n", mode);
+      }
+      mode_ptr = (unsigned char*)modeInfo.PhysBasePtr;
+      modeLineSize = modeInfo.BytesPerScanline;
+      break;
+   }
 
-	if (mode == 0xffff)
-	{
-		printf("not supported!");
-		close();
-		getkey();
-		return 0;
-	}
-	unsigned int LineSize=(bmih.biWidth*(bmih.biBitCount>>3)+3)&~3;
-	char *buff=malloc(bmfh.bfSize);
-	int x = 0,y = bmih.biHeight-1;
-	char *p,*p1;
-	if (!read((unsigned long long)(unsigned int)buff,bmfh.bfSize,GRUB_READ))
-	{
-		close();
-		return 0;
-	}
-	close();
-	p = buff;
-	vbe_flags.img = malloc(modeInfo.BytesPerScanline*modeInfo.YResolution);
-	for(y=bmih.biHeight-1;y>=0;--y)
-	{
-		p1 = vbe_flags.img + modeLineSize * y;
-		for(x=0;x<bmih.biWidth;++x)
-		{
-			*p1++=*p++;
-			*p1++=*p++;
-			*p1++=*p++;
-			if (modeInfo.BitsPerPixel==32)
-				*++p1;
-		}
-		p = buff +(bmih.biHeight-y)*LineSize;
-	}
-	free(buff);
-//	memmove(mode_ptr,vbe_flags.img,bmfh.bfSize);
-//	getkey();
-//	CloseMode();
-	vbe_flags.mode = mode;
+   if (mode == 0xffff)
+   {
+      printf("not supported!");
+      close();
+      getkey();
+      return 0;
+   }
+
+   unsigned int LineSize=(bmih.biWidth*(bmih.biBitCount>>3)+3)&~3;
+   char *buff=malloc(bmfh.bfSize);
+   int x = 0,y = bmih.biHeight-1;
+   char *p,*p1;
+   unsigned long BPB;
+   unsigned long BPL;
+   if (!read((unsigned long long)(unsigned int)buff,bmfh.bfSize,GRUB_READ))
+   {
+      close();
+      return 0;
+   }
+   close();
+   p = buff;
+   BPB = bmih.biBitCount>>3;
+   BPL = BPB * bmih.biWidth;
+   vbe_flags.image = malloc(modeInfo.BytesPerScanline*modeInfo.YResolution);
+   vbe_flags.BytesToLFB = modeInfo.PhysBasePtr - (unsigned long)vbe_flags.image;
+   for(y=bmih.biHeight-1;y>=0;--y)
+   {
+      p1 = vbe_flags.image + modeInfo.BytesPerScanline * y;
+      if (modeInfo.BitsPerPixel == 32 && BPB == 4)
+      {
+         memmove(p1,p,BPL);
+      }
+      else
+      {
+         for(x=0;x<bmih.biWidth;++x)
+         {
+            p1[0] = p[0];
+            p1[1] = p[1];
+            p1[2] = p[2];
+            p1+=3,p+=3;
+            if (modeInfo.BitsPerPixel==32)
+            {
+               *++p1=0;
+            }
+         }
+      }
+      p = buff +(bmih.biHeight-y)*LineSize;
+   }
+   free(buff);
+   vbe_flags.mode = mode;
 }
 
