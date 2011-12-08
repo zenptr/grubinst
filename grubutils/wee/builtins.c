@@ -1207,9 +1207,9 @@ map_func (char *arg/*, int flags*/)
 #endif
     if (grub_memcmp (arg, "--hook", 6) == 0)
       {
-	char *p;
+	/*dlin char *p; */
 
-	p = arg + 6;
+	/*dlin p = arg + 6; */
 	unset_int13_handler (0);
 	if (drive_map_slot_empty (bios_drive_map[0]))
 		return ! (errnum = ERR_NO_DRIVE_MAPPED);
@@ -3378,7 +3378,7 @@ map_whole_drive:
 
       {
 #if 1
-	unsigned long ret;
+	/*dlin unsigned long ret; */
 	struct realmode_regs regs;
 
 	regs.ebx = 0;	// start the iteration
@@ -3394,7 +3394,7 @@ map_whole_drive:
 	  regs.ds = regs.es = regs.fs = regs.gs = regs.eflags = -1;
 	  regs.cs = -1;		// CS=0xFFFFFFFF to run an INT instruction
 	  regs.eip = 0xFFFF15CD;	// run int15
-	  ret = realmode_run ((unsigned long)&regs);
+	  /*dlin ret = */ realmode_run ((unsigned long)&regs);
 	  if (regs.eax != 0x534D4150)
 	  {
 		grub_printf ("\nFatal: Your BIOS has no support for System Memory Map(INT15/EAX=E820h).\nAs a result you cannot use the --mem option.\n");
