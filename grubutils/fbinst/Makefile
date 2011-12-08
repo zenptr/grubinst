@@ -32,7 +32,7 @@ all_SRCS := fbinst.c $(extra_SRCS)
 all_OBJS = fbinst.o
 all_EXES = fbinst$(EXEEXT)
 
-extra_CLEAN = fb.mbr version.h fb_mbr.h
+extra_CLEAN = fb.mbr version.h fb_*.*
 
 -include common.mk $(SRCDIR)../common/common.mk
 

@@ -823,7 +823,7 @@ start_2000:
 1:
 	call	clear_dest
 	movw	$ABS(default_loader), %si
-	jmp	boot_xxldr
+	jmp	boot_buldr
 /*
  * input:
  *   %cl - type
@@ -1039,10 +1039,10 @@ boot_item:
 
 	movb	2(%si), %al
 	addw	$3, %si
-	cmpb	$FBS_TYPE_XXLDR, %al
+	cmpb	$FBS_TYPE_BULDR, %al
 	jnz	1f
 
-boot_xxldr:
+boot_buldr:
 	movb	$2, gdt_dst_hi1
 	call	load_file
 	call	setup_mbr

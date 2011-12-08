@@ -38,7 +38,7 @@
 #define FBM_TYPE_COLOR		5
 
 #define FBS_TYPE_MENU		1
-#define FBS_TYPE_XXLDR		2
+#define FBS_TYPE_BULDR		2
 #define FBS_TYPE_SYSLINUX	3
 #define FBS_TYPE_LINUX		4
 #define FBS_TYPE_MSDOS		5

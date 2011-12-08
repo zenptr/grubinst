@@ -2340,7 +2340,7 @@ add_item_menu (int ofs, int argc, char **argv)
       (! strcmp (argv[1], "msdos")) ||
       (! strcmp (argv[1], "freedos")) ||
       (! strcmp (argv[1], "chain")) ||
-      (! strcmp (argv[1], "xxldr")))
+      (! strcmp (argv[1], "buldr")))
     {
       if (argc < 3)
 	quit ("not enough parameters");
@@ -2367,7 +2367,7 @@ add_item_menu (int ofs, int argc, char **argv)
 	  type = FBS_TYPE_CHAIN;
 	  break;
 	case 'x':
-	  type = FBS_TYPE_XXLDR;
+	  type = FBS_TYPE_BULDR;
 	  break;
 	}
       size += strlen (get_name (argv[2])) + 1;
@@ -2425,7 +2425,7 @@ add_item_menu (int ofs, int argc, char **argv)
 
 	break;
       }
-    //case FBS_TYPE_XXLDR:
+    //case FBS_TYPE_BULDR:
     //case FBS_TYPE_GRLDR:
     //case FBS_TYPE_SYSLINUX:
     //case FBS_TYPE_MSDOS:
@@ -2915,8 +2915,8 @@ cat_menu (xd_t *xd, int argc, char **argv)
 	    printf ("menu %s ", get_keyname (m->key));
 	    switch (m->sys_type)
 	      {
-	      case FBS_TYPE_XXLDR:
-		printf ("xxldr \"%s\"\n", m->name);
+	      case FBS_TYPE_BULDR:
+		printf ("buldr \"%s\"\n", m->name);
 		break;
 	      case FBS_TYPE_GRLDR:
 		printf ("grldr \"%s\"\n", m->name);
