@@ -73,7 +73,7 @@ int main (char *arg, int flags)
 	
 	if (*arg)
 	{
-		memmove ((char *)&tmp_broder,menu_broder,sizeof(tmp_broder));
+		memmove ((char *)&tmp_broder,menu_border,sizeof(tmp_broder));
 	}
 	
 	for (i=0;i< 11 && *arg;i++)
@@ -97,10 +97,10 @@ int main (char *arg, int flags)
 	{
 		tmp_broder.menu_box_h = 0;
 	}
-	if (tmp_broder.menu_box_w > 78) tmp_broder.menu_box_w = 76;
-	if (tmp_broder.menu_box_x > 78) tmp_broder.menu_box_x = 2;
-	if (tmp_broder.menu_box_x + tmp_broder.menu_box_w > 78) tmp_broder.menu_box_x = 78 - tmp_broder.menu_box_w;
+	if (tmp_broder.menu_box_w > current_term->chars_per_line-2) tmp_broder.menu_box_w = current_term->chars_per_line-2;
+	if (tmp_broder.menu_box_x > current_term->chars_per_line-2) tmp_broder.menu_box_x = 2;
+	if (tmp_broder.menu_box_x + tmp_broder.menu_box_w > current_term->chars_per_line-2) tmp_broder.menu_box_x = current_term->chars_per_line-2 - tmp_broder.menu_box_w;
 	
-	memmove (menu_broder,(char *)&tmp_broder,sizeof(tmp_broder));
+	memmove (menu_border,(char *)&tmp_broder,sizeof(tmp_broder));
 	return 1;
 }

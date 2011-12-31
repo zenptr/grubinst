@@ -137,7 +137,7 @@ static VBEModeInfo_t modeInfo;
 static uint32_t l_pixel;
 
 void SetPixelBG (long x,long y,int a);
-static int get_font(int flags);
+static int get_font(void);
 static int _INT10_(uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx,uint32_t es,uint32_t edi);
 static int vbe_init(int mode);
 static void vbe_end(void);
@@ -148,7 +148,6 @@ static void vbe_scroll(void);
 static void vbe_putchar (unsigned int c);
 static int vbe_setcursor (int on);
 static void vbe_cursor(int on);
-static int vbe_current_color = -1;
 static int vbe_standard_color = -1;
 static int vbe_normal_color = 0x55ffff;
 static int vbe_highlight_color = 0xff5555;
@@ -160,21 +159,24 @@ static void vbe_setcolorstate (color_state state);
 static void vbe_setcolor (int normal_color, int highlight_color, int helptext_color, int heading_color);
 static struct 
 {
-	unsigned short mode;
-	unsigned short cursor;
-	unsigned char *image;
-	unsigned long BytesToLFB;
-	unsigned long BytesPerChar;
-} vbe_flags = {0,1,NULL,0,0};
+   char name[16];
+   unsigned short current_mode;
+   unsigned short cursor;
+   unsigned char *image;
+   unsigned long BytesToLFB;
+   unsigned long BytesPerChar;
+} vbe = {"VESA_TEST",0,1,NULL,0,0};
 
 static int vbe_vfont(char *file);
 static unsigned vfont_size=0;
 static uint8_t pre_ch;
-static char vesa_name[]="VESA_TEST";
 static struct term_entry vesa;
 static char mask[8]={0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
+static short mask_u[16]={1<<0, 1<<1, 1<<2,1<<3, 1<<4, 1<<5, 1<<6,1<<7,1<<8,1<<9,1<<10,1<<11,1<<12,1<<13,1<<14,1<<15};
 static char vfont[2048];
 static int open_bmp(char *file);
+static unsigned short *text = (unsigned short *)0x3FC000;
+static unsigned long cursor_offset = 0;
 
 struct realmode_regs {
 	unsigned long edi; // as input and output
@@ -223,7 +225,7 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 
 	if ((int)&main != 0x50000)//init move program to 0x50000
 	{
-		if (strcmp(current_term->name,vesa_name) != 0)
+		if (strcmp(current_term->name,vbe.name) != 0)
 		{
 			int prog_len=(*(int *)(&main - 20));
 			memmove((void*)0x50000,&main,prog_len);
@@ -239,9 +241,9 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
   }
 
 	struct term_entry *pre_term = current_term;;
-	if (strcmp(current_term->name,vesa_name) != 0)
+	if (strcmp(current_term->name,vbe.name) != 0)
 	{
-		vesa.name = vesa_name;
+		vesa.name = vbe.name;
 		vesa.flags = 0;
 		vesa.PUTCHAR = vbe_putchar;
 		vesa.CHECKKEY = current_term->CHECKKEY;
@@ -254,7 +256,7 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 		vesa.SETCURSOR = vbe_setcursor;
 		vesa.STARTUP = vbe_init;
 		vesa.SHUTDOWN = vbe_end;
-		font8x16 = (char*)get_font(0x600);
+		font8x16 = (char*)get_font();
 	}
 
 	if (memcmp(arg,"demo",4) != 0)
@@ -280,12 +282,26 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 			}
 			arg = skip_to(0,arg);
 		}
-		if (!mode && !vbe_flags.mode)
+		if (!mode && !vbe.current_mode)
 		{
-			if (GetModeInfo (0x115))
-				mode = 0x115;
-			else if (GetModeInfo (0x114))
-				mode = 0x114;
+			uint16_t* modeList = (uint16_t*)drvInfo.VideoModePtr;
+			uint16_t auto_mode;
+			while ((auto_mode = *modeList++) != 0xFFFF)
+			{
+				if (! GetModeInfo (auto_mode) ||
+				   modeInfo.XResolution != 800 ||
+				   modeInfo.YResolution != 600)
+					continue;
+				if (modeInfo.BitsPerPixel == 32)
+				{
+					mode = auto_mode;
+					break;
+				}
+				else if (modeInfo.BitsPerPixel == 24)
+				{
+					mode = auto_mode;
+				}
+			}
 		}
 		if (!vbe_init (mode))
 		{
@@ -297,10 +313,10 @@ int main(char *arg,int flags)//( int argc, char* argv[] )
 		vesa.chars_per_line = modeInfo.XResolution>>3;
 		vesa.max_lines = modeInfo.YResolution>>4;
 		current_term = &vesa;
-		if (vbe_flags.image)
-			memmove((char*)modeInfo.PhysBasePtr,vbe_flags.image,modeInfo.YResolution*modeInfo.BytesPerScanline);
+		if (vbe.image)
+			memmove((char*)modeInfo.PhysBasePtr,vbe.image,modeInfo.YResolution*modeInfo.BytesPerScanline);
 		printf("VBE for GRUB4DOS Current Mode: %dx%dx%d,%dx%d\n",modeInfo.XResolution,modeInfo.YResolution,modeInfo.BitsPerPixel,vesa.chars_per_line,vesa.max_lines);
-		getkey();
+//		getkey();
 		return 1;
 	}
 	return 0;
@@ -342,7 +358,7 @@ static int _INT10_(uint32_t eax,uint32_t ebx,uint32_t ecx,uint32_t edx,uint32_t 
 
 static int vbe_setcursor (int on)
 {
-	vbe_flags.cursor = on;
+	vbe.cursor = on;
 	vbe_cursor(on);
 	return 0;
 }
@@ -351,12 +367,13 @@ static int vbe_init(int mode)
 {
    if (!mode)
    {
-      mode = vbe_flags.mode;
+      mode = vbe.current_mode;
    }
    if (!GetModeInfo(mode) || !SetMode (mode))
       return 0;
-   vbe_flags.mode = mode;
-   vbe_flags.BytesPerChar = modeInfo.BitsPerPixel>>3;
+   current_color = -1;
+   vbe.current_mode = mode;
+   vbe.BytesPerChar = modeInfo.BitsPerPixel>>3;
    fontx=0,fonty=0;
    vesa.chars_per_line = modeInfo.XResolution>>3;
    vesa.max_lines = modeInfo.YResolution>>4;
@@ -365,15 +382,15 @@ static int vbe_init(int mode)
 
 static void vbe_end(void)
 {
-	if (vbe_flags.image)
-		free(vbe_flags.image);
+	if (vbe.image)
+		free(vbe.image);
 	CloseMode ();
 }
 
 static void vbe_cls(void)
 {
-   if (vbe_flags.image)
-      memmove((char*)modeInfo.PhysBasePtr,vbe_flags.image,modeInfo.YResolution * modeInfo.BytesPerScanline);
+   if (vbe.image)
+      memmove((char*)modeInfo.PhysBasePtr,vbe.image,modeInfo.YResolution * modeInfo.BytesPerScanline);
    else
    {
       uint32_t* l_lfb = (uint32_t*)modeInfo.PhysBasePtr;
@@ -383,6 +400,7 @@ static void vbe_cls(void)
          *l_lfb++=0;
       }
 	}
+	cursor_offset = 0;
 	fontx = 0;
 	fonty = 0;
 }
@@ -391,13 +409,13 @@ static void vbe_cursor(int on)
 {
    if (on)
       gfx_FillRect (fontx<<3,(fonty<<4)+15,(fontx+1)<<3,(fonty+1)<<4, vbe_cursor_color);
-   else if (vbe_flags.image)
+   else if (vbe.image)
    {
       uint8_t *lfb,*bg;
-      lfb = (uint8_t*)modeInfo.PhysBasePtr + ((fonty<<4)+15)*modeInfo.BytesPerScanline + (fontx<<3)*vbe_flags.BytesPerChar;
-      bg = lfb - vbe_flags.BytesToLFB;
-      memmove(lfb,bg,vbe_flags.BytesPerChar+1<<3);
-      memmove(lfb+modeInfo.BytesPerScanline,bg+modeInfo.BytesPerScanline,vbe_flags.BytesPerChar+1<<3);
+      lfb = (uint8_t*)modeInfo.PhysBasePtr + ((fonty<<4)+15)*modeInfo.BytesPerScanline + (fontx<<3)*vbe.BytesPerChar;
+      bg = lfb - vbe.BytesToLFB;
+      memmove(lfb,bg,vbe.BytesPerChar+1<<3);
+      memmove(lfb+modeInfo.BytesPerScanline,bg+modeInfo.BytesPerScanline,vbe.BytesPerChar+1<<3);
    }
    else
       gfx_FillRect (fontx<<3,(fonty<<4)+15,(fontx+1)<<3,(fonty+1)<<4, 0);
@@ -410,13 +428,13 @@ static void vbe_gotoxy(int x, int y)
 		x = vesa.chars_per_line;
 	if (y > vesa.max_lines)
 		y = vesa.max_lines;
-   if (vbe_flags.cursor)
+   if (vbe.cursor)
 	{
 		vbe_cursor(0);
 	}
 	fontx = x;
 	fonty = y;
-	if (vbe_flags.cursor)
+	if (vbe.cursor)
 	{
 		vbe_cursor(1);
 	}
@@ -432,9 +450,15 @@ static char inb(unsigned short port)
 
 void SetPixelBG(long x,long y,int a)
 {
-   uint8_t *lfb = (uint8_t*)modeInfo.PhysBasePtr + y*modeInfo.BytesPerScanline + x*vbe_flags.BytesPerChar;
-   if (vbe_flags.image)
-      *(unsigned long *)lfb = *(unsigned long *)(lfb - vbe_flags.BytesToLFB);
+   uint8_t *lfb = (uint8_t*)modeInfo.PhysBasePtr + y*modeInfo.BytesPerScanline + x*vbe.BytesPerChar;
+   if (vbe.image)
+   {
+      if (modeInfo.BitsPerPixel == 32)
+         *(unsigned long *)lfb = *(unsigned long *)(lfb - vbe.BytesToLFB);
+      else
+         *(unsigned short *)lfb = *(unsigned short *)(lfb - vbe.BytesToLFB);
+         lfb[2] = *(lfb - vbe.BytesToLFB + 2);
+   }
    else
       *(unsigned long *)lfb = 0;
    if (a)
@@ -449,21 +473,21 @@ static void vbe_scroll(void)
 	{
 		uint32_t i,j;
 		j = modeInfo.BytesPerScanline<<4;
-		if (vbe_flags.image)
+		if (vbe.image)
 		{
          uint8_t *ToBG,*FromBG,*l_lfb1;
          int k;
-         ToBG = l_lfb - vbe_flags.BytesToLFB;
+         ToBG = l_lfb - vbe.BytesToLFB;
          l_lfb1 = l_lfb + j;
-         FromBG = l_lfb1 - vbe_flags.BytesToLFB;
+         FromBG = l_lfb1 - vbe.BytesToLFB;
          for (i=0;i<fonty;++i)
          {
             memmove(l_lfb,ToBG,j);
-            for (k = 0;k<modeInfo.BytesPerScanline<<2;++k)
+            for (k = 0;k<modeInfo.BytesPerScanline<<4;++k)
             {
-               if (*(unsigned long*)&l_lfb1[k<<2] != *(unsigned long*)&FromBG[k<<2])
+               if (l_lfb1[k] != FromBG[k])
                {
-                  *(unsigned long*)&l_lfb[k<<2] = *(unsigned long*)&l_lfb1[k<<2];
+                  l_lfb[k] = l_lfb1[k];
                }
             }
             l_lfb += j;
@@ -487,14 +511,82 @@ static void vbe_scroll(void)
 
 static int vbe_getxy(void)
 {
-	return (fontx << 8) | fonty;
+	return (fonty << 8) | fontx;
 }
 
-static int get_font(int flags)
+static int get_font(void)
 {
-	struct realmode_regs int_regs = {0,0,0,-1,flags,0,0,0x1130,-1,-1,-1,-1,-1,0xFFFF10CD,-1,-1};
+	struct realmode_regs int_regs = {0,0,0,-1,0x600,0,0,0x1130,-1,-1,-1,-1,-1,0xFFFF10CD,-1,-1};
 	realmode_run((long)&int_regs);
 	return (int_regs.es<<4)+int_regs.ebp;
+}
+
+/* unifont start at 24M */
+#define UNIFONT_START		0x1800000
+
+#define narrow_char_indicator	(*(unsigned long *)(UNIFONT_START + ('A' << 5)))
+#define utf8_tmp ((char *)(UNIFONT_START + ('A' << 5) + 4))
+
+static unsigned long utf8_unicode(unsigned long offset,int n)
+{
+	unsigned short *c1,*p_text = text + offset - n;
+	unsigned long i,j,c;
+	unsigned long ch;
+	if (*p_text == 196 && p_text[1] == 191 && *(p_text - 1) == 196)
+	{
+		return 0;
+	}
+	c = *p_text;
+	/*检测该utf8字符串长度是否为n*/
+	for(i=0;i<=6;++i)
+	{
+		if (!(c & mask[i]))
+			break;
+	}
+	if (i != (n+1))
+		return 0;
+	ch = ((unsigned char)*p_text)<<i;
+	ch >>= i;
+	for (i = 0;i<=n;++i)
+	{
+		ch <<= 6;
+		ch |= *p_text & 0x3f;
+		*p_text++ = 0;
+	}
+	text[offset-n] = ch;
+	return n;
+}
+
+static unsigned long scan_utf8(unsigned long offset)
+{
+	int i,j,ch;
+	unsigned short *p_text = text;
+	j = (offset >= 6?6:offset);
+	p_text += offset;
+	for (i=0; i<j ;++i)
+	{
+		ch = *p_text & 0xFFC0;
+		/*
+			根据UTF8的规则
+			1.每个字符的最高位必须为1即0x80,
+			2.首个字符前面至少两个1,即像110xxxxx;
+			3.后面的字符必须是二进制10xxxxxx;
+			
+			因为这里是从字符的后面往前面判断的
+			所以只要判断该字符的前两位为1即0xC0,那该UTF8的字符串就从这个地方开始.
+		*/
+		if (ch == 0xC0)
+		{
+			/*用utf8_unicode函数进行转换,长度为i,如果长度不符合则返回0*/
+			return utf8_unicode(offset,i);
+		}
+		else if (ch != 0x80)
+		{
+			return 0;
+		}
+		--p_text;
+	}
+	return 0;
 }
 
 static void vbe_putchar (unsigned int c)
@@ -514,51 +606,120 @@ static void vbe_putchar (unsigned int c)
 	else if ((char)c == '\r') {
 		return vbe_gotoxy(0, fonty);
 	}
-   vbe_cursor(0);
+
+	unsigned long offset = fonty * vesa.chars_per_line + fontx;
+	text[offset] = (unsigned short)c;
+	vbe_cursor(0);
+
 	char *cha = font8x16 + ((unsigned char)c<<4);
 	int i,j;
+	uint8_t *lfb = (uint8_t*)modeInfo.PhysBasePtr + (fonty*modeInfo.BytesPerScanline<<4);
 
-	if (vfont_size)
+	if (narrow_char_indicator)
 	{
-		if ((unsigned char)c >= 0x80 && (pre_ch - (unsigned char)c) == 0x40 && (unsigned char)c < 0x80+vfont_size)
+		unsigned short unicode = scan_utf8(offset);
+		char k;
+		unsigned short *ch_u;
+		if (unicode)
 		{
-			uint8_t ch = pre_ch;
-			if (!fontx && fonty)
+			fontx -= unicode;
+			lfb += fontx*vbe.BytesPerChar<<3;
+			uint8_t *lfbx;
+			unicode = text[offset-unicode];
+			ch_u = (unsigned short *)UNIFONT_START + (unicode << 4);
+			if ((*(unsigned char *)(0x100000 + unicode)) & 1)
 			{
-				vbe_gotoxy(vesa.chars_per_line - 1 ,fonty-1);
-				vbe_putchar(' ');
+				k = 16;
 			}
-			else if (fontx)
-				--fontx;
-
-			cha = vfont + (ch - 0xC0)*32;
-
+			else
+			{
+				k = 8;
+				ch_u += 8;
+			}
+			for(j=0;j<k;++j)
+			{
+				lfbx = lfb;
+				for (i=0;i<16;++i)
+				{
+					if (ch_u[j] & mask_u[i])
+					{
+						switch (modeInfo.BitsPerPixel)
+						{
+							case 24:
+								*(uint16_t *)lfbx = (uint16_t)current_color;
+								lfbx[2] = (uint8_t)(current_color >> 16);
+								break;
+							case 32:
+								*(uint32_t *)lfbx = (uint32_t)current_color;
+								break;
+						}
+					}
+					else
+						SetPixelBG (fontx*8+j,fonty*16+i,c>>16);
+					lfbx += modeInfo.BytesPerScanline;
+				}
+				lfb +=vbe.BytesPerChar;
+			}
+			if (k == 16)
+				++fontx;
+		}
+		else
+		{
 			for (j=0;j<16;++j)
 			{
 				for (i=0;i<8;++i)
 				{
 					if (cha[j] & mask[i])
-						SetPixel (fontx*8+i,fonty*16+j,vbe_current_color);
+						SetPixel (fontx*8+i,fonty*16+j,current_color);
 					else
 						SetPixelBG (fontx*8+i,fonty*16+j,c>>16);
 				}
 			}
-			++fontx;
-			cha += 16;
 		}
-		pre_ch = (uint8_t)c;
 	}
-	for (j=0;j<16;++j)
+	else
 	{
-		for (i=0;i<8;++i)
+		if (vfont_size)
 		{
-			if (cha[j] & mask[i])
-				SetPixel (fontx*8+i,fonty*16+j,vbe_current_color);
-			else
-				SetPixelBG (fontx*8+i,fonty*16+j,c>>16);
+			if ((unsigned char)c >= 0x80 && (pre_ch - (unsigned char)c) == 0x40 && (unsigned char)c < 0x80+vfont_size)
+			{
+				uint8_t ch = pre_ch;
+				if (!fontx && fonty)
+				{
+					vbe_gotoxy(vesa.chars_per_line - 1 ,fonty-1);
+					vbe_putchar(' ');
+				}
+				else if (fontx)
+					--fontx;
+
+				cha = vfont + (ch - 0xC0)*32;
+
+				for (j=0;j<16;++j)
+				{
+					for (i=0;i<8;++i)
+					{
+						if (cha[j] & mask[i])
+							SetPixel (fontx*8+i,fonty*16+j,current_color);
+						else
+							SetPixelBG (fontx*8+i,fonty*16+j,c>>16);
+					}
+				}
+				++fontx;
+				cha += 16;
+			}
+			pre_ch = (uint8_t)c;
+		}
+		for (j=0;j<16;++j)
+		{
+			for (i=0;i<8;++i)
+			{
+				if (cha[j] & mask[i])
+					SetPixel (fontx*8+i,fonty*16+j,current_color);
+				else
+					SetPixelBG (fontx*8+i,fonty*16+j,c>>16);
+			}
 		}
 	}
-
 	if (fontx + 1 >= vesa.chars_per_line)
 	{
 		++fonty;
@@ -613,25 +774,25 @@ static void vbe_setcolorstate (color_state state)
 	switch (state)
 	{
 		case COLOR_STATE_STANDARD:
-			vbe_current_color = vbe_standard_color;
+			current_color = vbe_standard_color;
 			break;
 		case COLOR_STATE_NORMAL:
-			vbe_current_color = vbe_normal_color;
+			current_color = vbe_normal_color;
 			break;
 		case COLOR_STATE_HIGHLIGHT:
-			vbe_current_color = vbe_highlight_color;
+			current_color = vbe_highlight_color;
 			break;
 		case COLOR_STATE_HELPTEXT:
-			vbe_current_color = vbe_helptext_color;
+			current_color = vbe_helptext_color;
 			break;
 		case COLOR_STATE_HEADING:
-			vbe_current_color = vbe_heading_color;
+			current_color = vbe_heading_color;
 			break;
 		default:
-			vbe_current_color = vbe_standard_color;
+			current_color = vbe_standard_color;
 			break;
 	}
-//	vbe_current_color = EncodePixel(vbe_current_color>>16,vbe_current_color>>8,vbe_current_color);
+//	current_color = EncodePixel(current_color>>16,current_color>>8,current_color);
 	vbe_color_state = state;
 }
 
@@ -642,7 +803,7 @@ static void vbe_setcolor (int normal_color, int highlight_color, int helptext_co
 	{
 		vbe_standard_color = highlight_color;
 		if (vbe_color_state == COLOR_STATE_STANDARD)
-         vbe_current_color = vbe_standard_color;
+         current_color = vbe_standard_color;
 		vbe_cursor_color = helptext_color;
 		return;
 	}
@@ -691,7 +852,6 @@ int GetDriverInfo ()
 
 int GetModeInfo (uint16_t mode)
 {
-
     VBEModeInfo_t* mi;
 
     if (!mode || mode == 0xFFFF)
@@ -729,6 +889,7 @@ int SetMode (uint16_t mode)
       gfx_FillRect = gfx_FillRect32;
    else
       return 0;
+   
    if (_INT10_(0x4F02,0x4000|mode,0,0,-1,0) != 0x004F)
       return 0;
    return 1;
@@ -801,16 +962,16 @@ void SetPixel (long x, long y, uint32_t color)
 		return;
 
 	lfb = (uint8_t*)(modeInfo.PhysBasePtr + (y * modeInfo.BytesPerScanline) + (x * ((modeInfo.BitsPerPixel + 7) / 8)));
-	switch (modeInfo.BitsPerPixel)
-	{
-	case 24:
-		*(uint16_t *)lfb = (uint16_t)color;
-		lfb[2] = (uint8_t)(color >> 16);
-		break;
-	case 32:
-		*(uint32_t *)lfb = (uint32_t)color;
-		break;
-	}
+   switch (modeInfo.BitsPerPixel)
+   {
+      case 24:
+         *(uint16_t *)lfb = (uint16_t)color;
+         lfb[2] = (uint8_t)(color >> 16);
+         break;
+      case 32:
+         *(uint32_t *)lfb = (uint32_t)color;
+         break;
+   }
 }
 
   /*
@@ -1058,11 +1219,11 @@ static int open_bmp(char *file)
    p = buff;
    BPB = bmih.biBitCount>>3;
    BPL = BPB * bmih.biWidth;
-   vbe_flags.image = malloc(modeInfo.BytesPerScanline*modeInfo.YResolution);
-   vbe_flags.BytesToLFB = modeInfo.PhysBasePtr - (unsigned long)vbe_flags.image;
+   vbe.image = malloc(modeInfo.BytesPerScanline*modeInfo.YResolution);
+   vbe.BytesToLFB = modeInfo.PhysBasePtr - (unsigned long)vbe.image;
    for(y=bmih.biHeight-1;y>=0;--y)
    {
-      p1 = vbe_flags.image + modeInfo.BytesPerScanline * y;
+      p1 = vbe.image + modeInfo.BytesPerScanline * y;
       if (modeInfo.BitsPerPixel == 32 && BPB == 4)
       {
          memmove(p1,p,BPL);
@@ -1084,6 +1245,6 @@ static int open_bmp(char *file)
       p = buff +(bmih.biHeight-y)*LineSize;
    }
    free(buff);
-   vbe_flags.mode = mode;
+   vbe.current_mode = mode;
 }
 

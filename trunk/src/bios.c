@@ -1,5 +1,6 @@
 #include "grub4dos.h"
 
+unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the following comment. */
 struct realmode_regs {
 	unsigned long edi; // as input and output
 	unsigned long esi; // as input and output
@@ -18,21 +19,19 @@ struct realmode_regs {
 	unsigned long cs; // code segment, as input
 	unsigned long eflags; // as input and output
 };
-static int inl(unsigned short port);
-static char inb(unsigned short port);
+static unsigned int inl(unsigned short port);
+static unsigned char inb(unsigned short port);
 static void outb(unsigned short port, char val);
 static unsigned short inw(unsigned short port);
 static void outw(unsigned short port, unsigned short val);
 static void outl(unsigned short port, int val);
-unsigned long long GRUB = 0x534f443442555247LL;/* this is needed, see the following comment. */
+
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
  */
 
-//asm(".long 0x534F4434");
-
 /* a valid executable file for grub4dos must end with these 8 bytes */
-//asm(ASM_BUILD_DATE);
+asm(ASM_BUILD_DATE);
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");
 
@@ -152,14 +151,14 @@ static int main(char *arg,int flags)
 	return 0;
 }
 
-static int inl(unsigned short port)
+static unsigned int inl(unsigned short port)
 {
 	int ret_val;
 	__asm__ volatile ("inl %%dx,%%eax" : "=a" (ret_val) : "d"(port));
 	return (int)ret_val;
 }
 
-static char inb(unsigned short port)
+static unsigned char inb(unsigned short port)
 {
 	char ret_val;
 	__asm__ volatile ("inb %%dx,%%al" : "=a" (ret_val) : "d"(port));

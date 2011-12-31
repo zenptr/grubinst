@@ -556,7 +556,7 @@ static int set_func(char *arg,int flags)
 		get_cmdline_str.cmdline = value;
 		get_cmdline_str.echo_char = 0;
 		get_cmdline_str.readline = 1;
-		if (get_cmdline(get_cmdline_str))
+		if (get_cmdline_obsolete(get_cmdline_str))
 			return 0;
 		arg = value;
 	}

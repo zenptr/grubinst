@@ -75,7 +75,7 @@ static void graphics_cursor (int set);
 static void graphics_setxy (int col, int row);
 static void graphics_scroll (void);
 static int unifont_unload(void);
-void graphics_putchar (int ch);
+void graphics_putchar (unsigned int ch);
 
 
 //static unsigned char mask[16];
@@ -176,7 +176,7 @@ graphics_cursor (int set)
 {
 
     unsigned char *pat, *mem, *ptr;
-    int i, ch, offset, n, ch1, ch2;
+    unsigned i, ch, offset, n, ch1, ch2;
     int invert = 0;
 	static int dbcs_ending_byte;
 	static unsigned char by[16][2], chsa[16], chsb[16];
@@ -427,7 +427,7 @@ void scan_utf8(void)
 }
 
 void
-graphics_putchar (int ch)
+graphics_putchar (unsigned int ch)
 {
     if (ch == '\n') {
         if (fonty + 1 < y1)
@@ -455,10 +455,9 @@ graphics_putchar (int ch)
 		TEXT[fonty][fontx+1] = 0;
     }
     TEXT[fonty][fontx] = ch;
-/*
-    if (graphics_current_color == graphics_highlight_color)//if (graphics_current_color & 0xf0)
-        text[fonty * 80 + fontx] |= 0x10000;//0x100;
-*/
+    if (current_color == graphics_highlight_color)//if (graphics_current_color & 0xf0)
+        TEXT[fonty][fontx+1] |= 0x10000;//0x100;
+
 	if ((ch & 0xFF80) == 0x80)
 		scan_utf8();
 

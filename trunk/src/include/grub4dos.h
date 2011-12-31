@@ -1,9 +1,9 @@
 /*
  * The C code for a grub4dos executable may have defines as follows:
- * ���ڱ�д�ⲿ����ĺ������塣
+ * 用于编写外部命令的函数定义。
 */
-#ifndef GRUB4DOS_2010_12_15
-#define GRUB4DOS_2010_12_15
+#ifndef GRUB4DOS_2011_12_13
+#define GRUB4DOS_2011_12_13
 #undef NULL
 #define NULL         ((void *) 0)
 
@@ -145,8 +145,14 @@ typedef enum
 #define fontx ((*(int **)0x8304)[26])
 #define fonty ((*(int **)0x8304)[27])
 #define graphics_CURSOR ((*(int **)0x8304)[28])
-#define menu_broder ((*(struct broder ***)0x8304)[29])
-
+#define menu_border ((*(struct border ***)0x8304)[29])
+#define current_color ((*(int **)0x8304)[42])
+#define foreground ((*(int **)0x8304)[43])
+#define background ((*(int **)0x8304)[44])
+#define p_get_cmdline_str ((*(int **)0x8304)[45])
+#define splashimage_loaded ((*(unsigned long **)0x8304)[46])
+#define putchar_hooked ((*(unsigned long **)0x8304)[47])
+#define init_free_mem_start ((*(unsigned long **)0x8304)[48])
 #define cursorX (*(short *)(VARIABLE_GRAPHICS))
 #define cursorY (*(short *)(VARIABLE_GRAPHICS + 2))
 #define cursorBuf ((char *)(VARIABLE_GRAPHICS + 6))
@@ -183,7 +189,7 @@ typedef enum
 #define printf(...) sprintf(NULL, __VA_ARGS__)
 #define putstr ((void (*)(const char *))((*(int **)0x8300)[1]))
 #define putchar ((void (*)(int))((*(int **)0x8300)[2]))
-#define get_cmdline ((int (*)(struct get_cmdline_arg))((*(int **)0x8300)[3]))
+#define get_cmdline_obsolete ((int (*)(struct get_cmdline_arg cmdline))((*(int **)0x8300)[3]))
 #define getxy ((int (*)(void))((*(int **)0x8300)[4]))
 #define gotoxy ((void (*)(int, int))((*(int **)0x8300)[5]))
 #define cls ((void (*)(void))((*(int **)0x8300)[6]))
@@ -196,7 +202,7 @@ typedef enum
 #define strlen ((int (*)(const char *str))((*(int **)0x8300)[12]))
 #define strtok ((char *(*)(char *s, const char *delim))((*(int **)0x8300)[13]))
 #define strncat ((int (*)(char *s1, const char *s2, int n))((*(int **)0x8300)[14]))
-#define strcmp ((int (*)(const char *s1, const char *s2))((*(int **)0x8300)[15]))
+//#define strcmp ((int (*)(const char *s1, const char *s2))((*(int **)0x8300)[15]))
 #define strcpy ((char *(*)(char *dest, const char *src))((*(int **)0x8300)[16]))
 #define getkey ((int (*)(void))((*(int **)0x8300)[19]))
 #define checkkey ((int (*)(void))((*(int **)0x8300)[20]))
@@ -221,6 +227,7 @@ typedef enum
 #define skip_to ((char *(*)(int after_equal, char *cmdline))((*(int **)0x8300)[43]))
 #define builtin_cmd ((int (*)(char *cmd, char *arg, int flags))((*(int **)0x8300)[44]))
 #define get_datetime ((void (*)(unsigned long *date, unsigned long *time))((*(int **)0x8300)[45]))
+#define find_command ((struct builtin *(*)(char *))((*(int **)0x8300)[46]))
 #define get_mmap_entry ((int (*)(char *,int))((*(int **)0x8300)[49]))
 #define malloc ((void *(*)(int size))((*(int **)0x8300)[50]))
 #define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
@@ -256,6 +263,37 @@ rawwrite (unsigned long drive, unsigned long sector, char *buf)
 #define mem64 ((int (*)(int, unsigned long long, unsigned long long, unsigned long long))((*(int **)0x8300)[74]))
 //int envi_cmd(const char *var,char * const env,int flags);
 #define envi_cmd ((int (*)(const char*, char *const, int))((*(int **)0x8300)[75]))
+
+/* strncmpx 增强型字符串比较函数 by chenall 2011-12-13
+	int strncmpx(const char *s1,const char *s2, unsigned long n, int case_insensitive)
+	比较两个字符串s1,s2.长度: n,
+	如果n等于0，则只比较到字符串结束位置。否则比较指定长度n.不管字符串是否结束。
+	如果case_insensitive非0，比较字母时不区分大小写。
+	可以替换strcmp/memcmp等字符串比较函数
+	返回值: s1-s2
+		当s1<s2时，返回值<0
+		当s1=s2时，返回值=0
+		当s1>s2时，返回值>0
+*/
+#define strncmpx ((int (*)(const char*, const char*, unsigned long,int))((*(int **)0x8300)[76]))
+/*
+	以下几个字符串比较都是使用strncmpx来实现
+*/
+//比较字符串s1和s2。
+#define strcmp(s1,s2) strncmpx(s1,s2,0,0)
+//比较字符串s1和s2。不区分大小写
+#define stricmp(s1,s2) strncmpx(s1,s2,0,1)
+#define strcmpi stricmp
+//比较字符串s1和s2的前n个字符。
+#define strncmp(s1,s2,n) strncmpx(s1,s2,n,0)
+//比较字符串s1和s2的前n个字符但不区分大小写。
+#define strnicmp(s1,s2,n) strncmpx(s1,s2,n,1)
+#define strncmpi strnicmp
+
+//void rectangle(int left, int top, int length, int width, int line);
+#define rectangle ((void (*)(int,int,int,int,int))((*(int **)0x8300)[77]))
+
+#define get_cmdline ((int (*)(void))((*(int **)0x8300)[78]))
 
 #define RAW_ADDR(x) (x)
 #define SCRATCHADDR  RAW_ADDR (0x37e00)
@@ -438,7 +476,7 @@ struct term_entry
   void (*SETCOLORSTATE) (color_state state);
   /* Set the normal color and the highlight color. The format of each
      color is VGA's.  */
-  void (*SETCOLOR) (int normal_color, int highlight_color, int helptext_color, int heading_color);
+  void (*SETCOLOR) (unsigned long state,unsigned long long color[]);
   /* Turn on/off the cursor.  */
   int (*SETCURSOR) (int on);
 
@@ -446,6 +484,21 @@ struct term_entry
   int (*STARTUP) (void);
   /* function to use to shutdown a terminal */
   void (*SHUTDOWN) (void);
+};
+
+/* The table for a builtin.  */
+struct builtin
+{
+  /* The command name.  */
+  char *name;
+  /* The callback function.  */
+  int (*func) (char *, int);
+  /* The combination of the flags defined above.  */
+  int flags;
+  /* The short version of the documentation.  */
+  char *short_doc;
+  /* The long version of the documentation.  */
+  char *long_doc;
 };
 
 #endif
