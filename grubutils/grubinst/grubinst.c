@@ -742,17 +742,17 @@ int install(char* fn)
         memcpy(&grub_mbr[0x1b8],&prev_mbr[0x1b8],72);
       else if (fs==FST_FAT16)
         {
-          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x3E - 0xB);
+          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x3E - 0x8); //fix to preserve part of ID e.f. MSWIN4.1 now GRLDR4.1 instead of GRLDR<space><space><space> by Steve6375;
           valueat(grub_mbr,0x1C,unsigned long)=ssec;
         }
       else if (fs==FST_FAT32)
         {
-          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x5A - 0xB);
+          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x5A - 0x8);
           valueat(grub_mbr,0x1C,unsigned long)=ssec;
         }
       else if (fs==FST_NTFS)
         {
-          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x54 - 0xB);
+          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x54 - 0x8);
           valueat(grub_mbr,0x1C,unsigned long)=ssec;
         }
     }
