@@ -1,0 +1,56 @@
+#summary hotkey for grub4dos.
+#labels Featured
+= 简介 =
+
+从2011-12-30版本开始，GRUB4DOS支持热键功能。可以在菜单界面直接按某个指定的热键启动某项菜单。
+
+= 用法介绍 =
+
+  # 直接下载最新版本hotkey命令放到grldr同磁盘的\boot\grub目录下。
+    如果您对GRUB4DOS外部命令运行机制比较熟悉，你可以放到自己喜欢的目录下。
+  # 在你的菜单头部添加一句hotkey命令。
+  # 在菜单的title后面添加hotkey支持的标识符号。
+    目前支持以下两种方式:
+    * 如果不需要在菜单上显示热键名称
+      title `^`_*HOTKEY* 菜单标题_
+    * 如果需要在菜单上显示热键名称（2012-01-03版开始支持）
+      title [*_HOTKEY_*] _菜单标题_
+
+注：两种热键方式可以根据需要选择使用。
+
+=用法举例=
+一个菜单的例子.
+{{{
+default 1
+timeout 5
+##启用热键（如果您有多个菜单，只需要在主菜单启用即可，会自动生效）
+hotkey
+
+##使用按键'A'作为热键。
+title [A] Microsoft Windows Xp
+pause Boot To Winxp
+
+##按'B'键启动
+title [B] Microsoft Windows PE
+pause Boot TO WINPE
+
+##按'F2'键启动，但不显示前面的F2
+title ^F2 Test for hotkey F2
+pause You have press Hotkey F2
+
+##按'R'键重启
+title [R] Reboot
+reboot
+
+##按'H'键关机
+title [H] Halt
+halt
+
+##隐藏的菜单项目。
+title ^F5
+pause Hidden 
+}}}
+
+启动效果预览
+
+http://photo.staticsdo.com/a1/230/284/421/89403-49499083-8.png
