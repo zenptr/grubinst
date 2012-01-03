@@ -26,14 +26,14 @@ typedef struct
 
 typedef struct 
 {
-	unsigned long flags;
-	int f11;
+	unsigned short key_code;
+	unsigned short title_num;
 } hotkey_t;
 #define HOTKEY_MAGIC 0X79654B48
 #define HOTKEY_PROG_MEMORY	0x2000000-0x200000
 #define HOTKEY_FUNC *(int*)0x827C
 static key_tab_t key_table[90] = {
-  {{0x011b, 0x011b, 0x011b, 0x0100}, "esc"},
+//  {{0x011b, 0x011b, 0x011b, 0x0100}, "esc"},
   {{0x0231, 0x0221, 0x0000, 0x7800}, "1"},
   {{0x0332, 0x0340, 0x0300, 0x7900}, "2"},
   {{0x0433, 0x0423, 0x0000, 0x7a00}, "3"},
@@ -46,8 +46,8 @@ static key_tab_t key_table[90] = {
   {{0x0b30, 0x0b29, 0x0000, 0x8100}, "0"},
   {{0x0c2d, 0x0c5f, 0x0c1f, 0x8200}, "-"},
   {{0x0d3d, 0x0d2b, 0x0000, 0x8300}, "="},
-  {{0x0e08, 0x0e08, 0x0e7f, 0x0e00}, "backspace"},
-  {{0x0f09, 0x0f00, 0x9400, 0xa500}, "tab"},
+//  {{0x0e08, 0x0e08, 0x0e7f, 0x0e00}, "backspace"},
+//  {{0x0f09, 0x0f00, 0x9400, 0xa500}, "tab"},
   {{0x1071, 0x1051, 0x1011, 0x1000}, "q"},
   {{0x1177, 0x1157, 0x1117, 0x1100}, "w"},
   {{0x1265, 0x1245, 0x1205, 0x1200}, "e"},
@@ -60,7 +60,7 @@ static key_tab_t key_table[90] = {
   {{0x1970, 0x1950, 0x1910, 0x1900}, "p"},
   {{0x1a5b, 0x1a7b, 0x1a1b, 0x1a00}, "["},
   {{0x1b5d, 0x1b7d, 0x1b1d, 0x1b00}, "]"},
-  {{0x1c0d, 0x1c0d, 0x1c0a, 0xa600}, "enter"},
+//  {{0x1c0d, 0x1c0d, 0x1c0a, 0xa600}, "enter"},
   {{0x1e61, 0x1e41, 0x1e01, 0x1e00}, "a"},
   {{0x1f73, 0x1f53, 0x1f13, 0x1f00}, "s"},
   {{0x2064, 0x2044, 0x2004, 0x2000}, "d"},
@@ -83,10 +83,10 @@ static key_tab_t key_table[90] = {
   {{0x326d, 0x324d, 0x320d, 0x3200}, "m"},
   {{0x332c, 0x333c, 0x0000, 0x0000}, ","},
   {{0x342e, 0x343e, 0x0000, 0x0000}, "."},
-  {{0x352f, 0x352f, 0x9500, 0xa400}, "key-/"},
+//  {{0x352f, 0x352f, 0x9500, 0xa400}, "key-/"},
   {{0x352f, 0x353f, 0x0000, 0x0000}, "/"},
-  {{0x372a, 0x0000, 0x9600, 0x3700}, "key-*"},
-  {{0x3920, 0x3920, 0x3920, 0x3920}, "space"},
+//  {{0x372a, 0x0000, 0x9600, 0x3700}, "key-*"},
+//  {{0x3920, 0x3920, 0x3920, 0x3920}, "space"},
   {{0x3b00, 0x5400, 0x5e00, 0x6800}, "f1"},
   {{0x3c00, 0x5500, 0x5f00, 0x6900}, "f2"},
   {{0x3d00, 0x5600, 0x6000, 0x6a00}, "f3"},
@@ -97,6 +97,7 @@ static key_tab_t key_table[90] = {
   {{0x4200, 0x5b00, 0x6500, 0x6f00}, "f8"},
   {{0x4300, 0x5c00, 0x6600, 0x7000}, "f9"},
   {{0x4400, 0x5d00, 0x6700, 0x7100}, "f10"},
+/*
   {{0x4700, 0x4737, 0x7700, 0x9700}, "home"},
   {{0x4800, 0x4838, 0x8d00, 0x9800}, "up"},
   {{0x4900, 0x4939, 0x8400, 0x9900}, "pgup"},
@@ -108,11 +109,14 @@ static key_tab_t key_table[90] = {
   {{0x4f00, 0x4f31, 0x7500, 0x9f00}, "end"},
   {{0x5000, 0x5032, 0x9100, 0xa000}, "down"},
   {{0x5100, 0x5133, 0x7600, 0xa100}, "pgdn"},
+*/
   {{0x5200, 0x5230, 0x9200, 0xa200}, "ins"},
   {{0x5300, 0x532e, 0x9300, 0xa300}, "del"},
   {{0x8500, 0x8700, 0x8900, 0x8b00}, "f11"},
   {{0x8600, 0x8800, 0x8a00, 0x8c00}, "f12"},
+/*
   {{0x0000, 0x0000, 0x7200, 0x0000}, "prtsc"},
+*/
   {{0x0000, 0x0000, 0x0000, 0x0000}, 0}
 };
 
@@ -131,12 +135,11 @@ static char keyname_buf[16];
 static char* str_upcase (char* str);
 static int get_keycode (char* key);
 static int get_key(void);
+static int check_hotkey(char **title);
 static int check_f11(void);
 static int (*_checkkey_)(void);
 static char *get_keyname (unsigned short code);
 static int check_allow_key(unsigned short key);
-static unsigned short *hotkey = 0;
-static int hotkeys = 0;
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
  */
@@ -153,112 +156,105 @@ asm(".long 0xBCBAA7BA");
 static int main(char *arg,int flags)
 {
 	int i;
-	char *p;
 	char *base_addr;
 	char *magic;
-	hotkey_t *hkey_flag;
+	static hotkey_t *hotkey;
+	unsigned long hotkey_flags;
+	unsigned long *p_hotkey_flags;
 	base_addr = (char *)(init_free_mem_start+512);
-	hotkey = (unsigned short*)base_addr;
-	hkey_flag = (hotkey_t*)(base_addr + 504);
+	hotkey = (hotkey_t*)base_addr;
+	p_hotkey_flags = (unsigned long*)(base_addr + 508);
 	if (flags == -1)
 	{
 		int c;
-		if (my_app_id != HOTKEY_MAGIC || !hotkeys)
+		if (my_app_id != HOTKEY_MAGIC || !hotkey->key_code)
 		{
 			return getkey();
 		}
-		_checkkey_ = (int(*)(void))hkey_flag->f11;
-		re_getkey:
+		hotkey_flags = *p_hotkey_flags;
 		c = _checkkey_();
 		if (!c || check_allow_key(c))
 			return c;
-		for (i=0;hotkey[i] != 0xFFEE;++i)
+		for (;hotkey->key_code;++hotkey)
 		{
-			if (hotkey[i] == c)
-				return hkey_flag->flags|(i<<16);
+			if (hotkey->key_code == c)
+				return hotkey_flags|(hotkey->title_num<<16);
 		}
-		if (hkey_flag->flags & (1<<29))
-			goto re_getkey;
+		if (hotkey_flags & (1<<29))
+			return 0;
 		return c;
 	}
 	else if (flags == 0)
 	{
 		char **titles;
-		titles = (char **)(base_addr+512);
-		hotkeys = 0;
-		for(i=0;i<251;++i)
+		titles = (char **)(base_addr + 512);
+		for(i=0;i<126;++i)
 		{
-			if (*titles)
-			{
-				arg = *titles;
-				while (*arg && *arg <= ' ')
-					++arg;
-				if (*arg != '^')
-					hotkey[i] = 0;
-				else
-				{
-					++arg;
-					sprintf(keyname_buf,"%.15s",arg);
-					nul_terminate(keyname_buf);
-					if ((hotkey[i] = (unsigned short)get_keycode(keyname_buf)))
-					{
-						arg+=strlen(keyname_buf);
-						*arg = *(*titles);
-						*titles = arg;
-						++hotkeys;
-					}
-				}
-				++titles;
-			}
-			else
+			if (!*titles)
 				break;
+			if (hotkey->key_code = check_hotkey(titles))
+			{
+				hotkey->title_num = i;
+				++hotkey;
+			}
+			++titles;
 		}
-		if (hkey_flag->f11 == -1)
-			hkey_flag->f11 = (int)&get_key;
-		return hotkey[i] = 0xFFEE;
+		hotkey->key_code = 0;
+		if (!_checkkey_)
+			_checkkey_ = get_key;
+		return 1;
 	}
 	printf("Hotkey for grub4dos by chenall,%s\n",__DATE__);
-	hkey_flag->flags = 1<<31;
-	if (*arg == '-')
+	hotkey_flags = 1<<31;
+	while (*arg == '-')
 	{
 		++arg;
 		if (*(unsigned short*)arg == 0x626E) //nb not boot
-			hkey_flag->flags |= 1<<30;
+			hotkey_flags |= 1<<30;
 		else if (*(unsigned short*)arg == 0x636E) //nc not control
-			hkey_flag->flags |= 1<<29;
+			hotkey_flags |= 1<<29;
 		else if (*arg == 'u')
 		{
 			HOTKEY_FUNC = 0;
 			return builtin_cmd("delmod","hotkey",flags);
 		}
+		arg = wee_skip_to(arg,0);
 	}
-	p = (char *)&main;
+   *p_hotkey_flags = hotkey_flags;
+	if (!HOTKEY_FUNC)
 	{
 		int buff_len;
+		char *p;
+		p = (char *)&main;
 		buff_len = *(int*)(p-20);
-		if (buff_len > 0x4000)
+		if (buff_len > 0x4000)//文件太大加载失败。限制hotkey程序不可以超过16KB。
 			return 0;
+		if (check_f11())//检测BIOS是否支持F11,F12热键，如果有支持直接使用getkey函数取得按键码
+		{
+			_checkkey_ = getkey;
+			printf("Current BIOS supported F11,F12 key.\n");
+		}
+		else
+		{
+			_checkkey_ = 0;
+			printf("Current BIOS Does not support F11,F12 key,try to hack it.\n");
+		}
+		//HOTKEY程序驻留内存，直接复制自身代码到指定位置。
 		my_app_id = HOTKEY_MAGIC;
 		memmove((void*)HOTKEY_PROG_MEMORY,p,buff_len);
+		//开启HOTKEY支持，即设置hotkey_func函数地址。
 		HOTKEY_FUNC = HOTKEY_PROG_MEMORY;
+		//获取程序执行时的路径的文件名。
+		p = p-*(int*)(p-16);
+		strncat(p," hotkey",-1);
+		builtin_cmd("insmod",p,flags);
+		printf("Hotkey Installed!\n");
 	}
-	printf("Hotkey Installed!\n");
-	if (check_f11())
-	{
-		hkey_flag->f11 = ((*(int **)0x8300)[19]);
-		printf("Current BIOS supported F11,F12 key.\n");
-	}
-	else
-	{
-		hkey_flag->f11 = -1;
-		printf("Current BIOS Does not support F11,F12 key,try to hack it.\n");
-	}
-	p = p-*(int*)(p-16);
-	strncat(p," hotkey",-1);
-	builtin_cmd("insmod",p,flags);
 	return 0;
 }
-
+/*
+	检测当前的按键码是否方向键或回车键
+*/
 static int check_allow_key(unsigned short key)
 {
 	int i;
@@ -281,6 +277,7 @@ str_upcase (char *str)
 
   return str;
 }
+
 static char inb(unsigned short port)
 {
 	char ret_val;
@@ -293,13 +290,17 @@ static void outb(unsigned short port, char val)
 	__asm__ volatile ("outb %%al,%%dx"::"a" (val), "d"(port));
 }
 
-/*���BIOS�Ƿ�֧��F11��Ϊ�ȼ�*/
+/*检查BIOS是否支持F11作为热键*/
 static int check_f11(void)
 {
 	int i;
+	//要发送按键的指令。
 	outb(0x64,0xd2);
+	//发送一个按键扫描码
 	outb(0x60,0x57);
+	//发送一个按键中断码  扫描码（scan_code）+ 0x80 = 中断码（Break Code）
 	outb(0x60,0xD7);
+	//判断是否可以接收到这个按键，有的话就是有支持，否则不支持。
 	for(i=0;i<3;++i)
 	{
 		if (checkkey() == 0x8500)
@@ -315,22 +316,74 @@ static int get_key(void)
 {
 	while(checkkey()<0)
 	{
+	//没有检测到按键，可能是用户没有按键或者BIOS不支持
 		unsigned char c = inb(0x60);
+		//扫描码低于0X57的不处理，直接丢给BIOS。
 		if (c < 0x57)
 		{
 			outb(0x64,0xd2);
 			outb(0x60,c);
 			break;
 		}
-		switch(c |= 0x80)
+		switch(c |= 0x80)//取中断码
 		{
-			case 0xd7:
+			case 0xd7: //F11
 				return 0x8500;
-			case 0xd8:
+			case 0xd8: //F12
 				return 0x8600;
 		}
 	}
+	//bios检测到按键，
 	return getkey();
+}
+
+/*
+	从菜单标题中提取热键代码
+	返回热键对应的按键码。
+*/
+static int check_hotkey(char **title)
+{
+	char *arg = *title;
+	unsigned short code;
+	while (*arg && *arg <= ' ')
+		++arg;
+	if (*arg == '^')
+	{
+		++arg;
+		sprintf(keyname_buf,"%.15s",arg);//最多复制15个字符
+		nul_terminate(keyname_buf);//在空格处截断
+		if ((code = (unsigned short)get_keycode(keyname_buf)))
+		{
+			//设置新的菜单标题位置
+			arg+=strlen(keyname_buf);
+			*arg = *(*title);
+			*title = arg;
+			return code;
+		}
+	}
+	else if (*arg == '[')
+	{
+		int i;
+		++arg;
+		while (*arg == ' ' || *arg == '\t')
+			++arg;
+		for(i = 0;i<15;++arg)
+		{
+			if (!*arg || *arg == ' ' || *arg == ']' )
+			{
+				break;
+			}
+			keyname_buf[i++] = *arg;
+		}
+		while (*arg == ' ')
+			++arg;
+		if (*arg != ']')
+			return 0;
+		keyname_buf[i] = 0;
+		code = (unsigned short)get_keycode(keyname_buf);
+		return code;
+	}
+	return 0;
 }
 
 static int
