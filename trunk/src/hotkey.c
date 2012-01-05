@@ -131,13 +131,13 @@ static unsigned short allow_key[9] = {
 /*KEY_DOWN        */0x5000,
 /*KEY_NPAGE       */0x5100
 };
+static int _checkkey_ = 0;
 static char keyname_buf[16];
 static char* str_upcase (char* str);
 static int get_keycode (char* key);
 static int get_key(void);
 static int check_hotkey(char **title);
 static int check_f11(void);
-static int (*_checkkey_)(void);
 static char *get_keyname (unsigned short code);
 static int check_allow_key(unsigned short key);
 /* gcc treat the following as data only if a global initialization like the
@@ -172,7 +172,7 @@ static int main(char *arg,int flags)
 			return getkey();
 		}
 		hotkey_flags = *p_hotkey_flags;
-		c = _checkkey_();
+		c = get_key();
 		if (!c || check_allow_key(c))
 			return c;
 		for (;hotkey->key_code;++hotkey)
@@ -200,8 +200,6 @@ static int main(char *arg,int flags)
 			++titles;
 		}
 		hotkey->key_code = 0;
-		if (!_checkkey_)
-			_checkkey_ = get_key;
 		return 1;
 	}
 	printf("Hotkey for grub4dos by chenall,%s\n",__DATE__);
@@ -231,7 +229,7 @@ static int main(char *arg,int flags)
 			return 0;
 		if (check_f11())//检测BIOS是否支持F11,F12热键，如果有支持直接使用getkey函数取得按键码
 		{
-			_checkkey_ = getkey;
+			_checkkey_ = 1;
 			printf("Current BIOS supported F11,F12 key.\n");
 		}
 		else
@@ -314,26 +312,29 @@ static int check_f11(void)
 
 static int get_key(void)
 {
-	while(checkkey()<0)
+	if (_checkkey_ == 0)//BIOS不支持F11热键
 	{
-	//没有检测到按键，可能是用户没有按键或者BIOS不支持
-		unsigned char c = inb(0x60);
-		//扫描码低于0X57的不处理，直接丢给BIOS。
-		if (c < 0x57)
+		while(checkkey()<0)
 		{
-			outb(0x64,0xd2);
-			outb(0x60,c);
-			break;
+		//没有检测到按键，可能是用户没有按键或者BIOS不支持
+			unsigned char c = inb(0x60);
+			//扫描码低于0X57的不处理，直接丢给BIOS。
+			if (c < 0x57)
+			{
+				outb(0x64,0xd2);
+				outb(0x60,c);
+				break;
+			}
+			switch(c |= 0x80)//取中断码
+			{
+				case 0xd7: //F11
+					return 0x8500;
+				case 0xd8: //F12
+					return 0x8600;
+			}
 		}
-		switch(c |= 0x80)//取中断码
-		{
-			case 0xd7: //F11
-				return 0x8500;
-			case 0xd8: //F12
-				return 0x8600;
-		}
+		//bios检测到按键，
 	}
-	//bios检测到按键，
 	return getkey();
 }
 
@@ -356,6 +357,8 @@ static int check_hotkey(char **title)
 		{
 			//设置新的菜单标题位置
 			arg+=strlen(keyname_buf);
+			if (*arg == 0)
+				--arg;
 			*arg = *(*title);
 			*title = arg;
 			return code;
