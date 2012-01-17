@@ -639,7 +639,7 @@ int main( int argc, char *argv[] )
          return 0;
       case 'l':
          install_flag |= FLAG_LISTDEVS;
-         return 0;
+         break;
       case 'o':
          saveold_filename = optarg;
          break;
