@@ -25,7 +25,6 @@ static void outb(unsigned short port, char val);
 static unsigned short inw(unsigned short port);
 static void outw(unsigned short port, unsigned short val);
 static void outl(unsigned short port, int val);
-
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
  */
@@ -94,8 +93,17 @@ static int main(char *arg,int flags)
 			arg = skip_to(0,arg);
 		}
 		ll = realmode_run((long)&int_regs);
-		printf("\tEAX=%08X   EBX=%08X   ECX=%08X   EDX=%08X\n\tESP=%08X   EBP=%08X   EDI=%08X   ES=%08X",int_regs.eax,int_regs.ebx,int_regs.ecx,int_regs.edx,int_regs.esp,int_regs.ebp,int_regs.edi,int_regs.es);
-		return ll;
+		flags = int_regs.eflags;
+		printf("  EAX=%08X  EBX=%08X  ECX=%08X  EDX=%08X  ESI=%08X"
+				 "\n  EDI=%08X  EBP=%08X  ESP=%08X  EIP=%08X  eFLAG=%08X"
+				 "\n  DS=%04X  ES=%04X  FS=%04X  GS=%04X  SS=%04X  CS=%04X  %s %s %s %s %s %s %s %s",
+				int_regs.eax,int_regs.ebx,int_regs.ecx,int_regs.edx,int_regs.esi,
+				int_regs.edi,int_regs.ebp,int_regs.esp,int_regs.eip,flags,
+				(short)int_regs.ds,(short)int_regs.es,(short)int_regs.fs,(short)int_regs.gs,(short)int_regs.ss,(short)int_regs.cs,
+				(flags&(1<<11))?"OV":"NV",flags&(1<<10)?"DN":"UP",flags&(1<<9)?"EI":"DI",flags&(1<<7)?"NG":"PL",
+				flags&(1<<6)?"ZR":"NZ",flags&(1<<4)?"AC":"NA",flags&4?"PE":"PO",flags&1?"CY":"NC"
+				);
+		return int_regs.eax;
 	}
 	else
 	{
