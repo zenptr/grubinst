@@ -99,18 +99,23 @@ void PrintError(HWND hWnd,DWORD msg)
 
 void RefreshDisk(HWND hWnd)
 {
-  char dn[24],nn[20];
+  char dn[24] = "\\\\.\\PhysicalDrive/",nn[20];
   int i;
 
   SendDlgItemMessage(hWnd,IDC_DISKS,CB_RESETCONTENT,0,0);
-  strcpy(dn,"\\\\.\\PhysicalDrive0");
+//  strcpy(dn,"\\\\.\\PhysicalDrive0");
   for (i=0;i<MAX_DISKS;i++)
     {
       HANDLE hd;
       DISK_GEOMETRY ge;
       DWORD rs;
+      if (i < 10)
+			++dn[17];
+		else if (i > 10)
+			++dn[18];
+		else
+			*(unsigned short *)&dn[17]=0x3031;//or use dn[17]='1',dn[18]='0',dn[19]=0;
 
-      dn[17]='0'+i;
       hd=CreateFile (dn,GENERIC_READ | GENERIC_WRITE,FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,OPEN_EXISTING, 0, NULL);
       if (hd==INVALID_HANDLE_VALUE)
         continue;

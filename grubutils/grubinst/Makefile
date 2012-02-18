@@ -94,4 +94,4 @@ grubinst_gui$(EXEEXT): grubinst_gui.o utils.o xdio.o grubinst_gui.ro
 endif
 
 grub_mbr.h: grldr.mbr $(BIN2H_DEPS)
-	$(BIN2H_EXEC) $< $@ grub_mbr
+	./$(BIN2H_EXEC) $< $@ grub_mbr

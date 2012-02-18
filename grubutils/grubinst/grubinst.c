@@ -51,6 +51,7 @@
 #define GFG_DISABLE_FLOPPY	1
 #define GFG_DISABLE_OSBR	2
 #define GFG_DUCE		4
+#define CFG_CHS_NO_TUNE		8	/*--chs-no-tune add by chenall* 2008-12-15*/
 #define GFG_PREVMBR_LAST	128
 
 #define APP_NAME		"grubinst: "
@@ -140,7 +141,8 @@ void help(void)
         "\t--output,-o\t\tSave embeded grldr.mbr to DEVICE_OR_FILE.\n\n"
         "\t--edit,-e\t\tEdit external grldr/grldr.mbr.\n\n"
         "\t--skip-mbr-test\t\tSkip chs validity test in mbr.\n\n"
-        "\t--copy-bpb\t\tDon't copy bpb of the first partition to mbr.\n",
+        "\t--copy-bpb\t\tDon't copy bpb of the first partition to mbr.\n\n"
+	"\t--chs-no-tune\t\tdisable the feature of geometry tune.\n",/*--chs-no-tune add by chenall* 2008-12-15*/
         stderr);
 }
 
@@ -254,7 +256,10 @@ int install(char* fn)
           print_syserr("open");
           return errno;
         }
-      r1=valueat(grub_mbr[0x1FFA],0,unsigned short);
+//      r1=valueat(grub_mbr[0x1FFA],0,unsigned short);
+			r1=valueat(grub_mbr[0x23FA],0,unsigned short);
+//注:这里不改变也是可以的,
+//新版本GRLDR.MBR版本标志位置在0x23fa,0X1FFA也是,后面修改GRLDR部份的位置不变 by chenall
       nn=read(hd,grub_mbr,sizeof(grub_mbr));
       if (nn==-1)
         {
@@ -383,7 +388,12 @@ int install(char* fn)
   if ((key_name==NULL) && (hot_key==0x3920))
     key_name="SPACE";
   if (key_name)
-    strcpy(&grub_mbr[0x1fec],key_name);
+  /*strcpy(&grub_mbr[0x1fec],key_name);
+  新版本热键名写入的位置 by chenall
+	*/
+  // strcpy(&grub_mbr[0x23ec],key_name);03版热键.
+  strcpy(&grub_mbr[0x1FE8],key_name);//04版热键位置  2008-12-30
+  
 
   xd=xd_open(fn,(! (afg & AFG_READ_ONLY)));
   if (xd==NULL)
@@ -742,17 +752,17 @@ int install(char* fn)
         memcpy(&grub_mbr[0x1b8],&prev_mbr[0x1b8],72);
       else if (fs==FST_FAT16)
         {
-          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x3E - 0x8); //fix to preserve part of ID e.f. MSWIN4.1 now GRLDR4.1 instead of GRLDR<space><space><space> by Steve6375;
+          memcpy(&grub_mbr[0x8],&prev_mbr[0x8],0x3E - 0x8); //fix to preserve part of ID e.f. MSWIN4.1 now GRLDR4.1 instead of GRLDR<space><space><space> by Steve6375;
           valueat(grub_mbr,0x1C,unsigned long)=ssec;
         }
       else if (fs==FST_FAT32)
         {
-          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x5A - 0x8);
+          memcpy(&grub_mbr[0x8],&prev_mbr[0x8],0x5A - 0x8);
           valueat(grub_mbr,0x1C,unsigned long)=ssec;
         }
       else if (fs==FST_NTFS)
         {
-          memcpy(&grub_mbr[0xB],&prev_mbr[0xB],0x54 - 0x8);
+          memcpy(&grub_mbr[0x8],&prev_mbr[0x8],0x54 - 0x8);
           valueat(grub_mbr,0x1C,unsigned long)=ssec;
         }
     }
@@ -831,6 +841,8 @@ int main(int argc,char** argv)
         gfg|=GFG_DISABLE_OSBR;
       else if (! strcmp(argv[idx],"--duce"))
         gfg|=GFG_DUCE;
+      else if (! strcmp(argv[idx],"--chs-no-tune"))	/*--chs-no-tune add by chenall* 2008-12-15*/
+        gfg|=CFG_CHS_NO_TUNE;
       else if (! strcmp(argv[idx],"--boot-prevmbr-first"))
         gfg&=~GFG_PREVMBR_LAST;
       else if (! strcmp(argv[idx],"--boot-prevmbr-last"))
