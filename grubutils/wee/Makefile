@@ -58,7 +58,7 @@ endif
 
 $(OBJDIR)/%.o: %.c $(BUILDROOT)/shared.h
 	@mkdir -p $(OBJDIR)
-	gcc -Os -fno-stack-protector -fno-builtin -mpreferred-stack-boundary=2 -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef $(DEFINES) -c $*.c -o $(OBJDIR)/$*.o
+	gcc -Os -fno-stack-protector -fno-builtin -mpreferred-stack-boundary=2 -fno-strict-aliasing -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef $(DEFINES) -c $*.c -o $(OBJDIR)/$*.o
 
 $(OBJDIR)/%.o: %.S $(BUILDROOT)/shared.h
 	@mkdir -p $(OBJDIR)
