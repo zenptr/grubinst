@@ -36,7 +36,7 @@ for file in *.c;do
 			fi
 		fi
 		echo "build $file --> $OUT --> ./bin/${file%*.c}"
-		$CC -nostdlib -DASM_BUILD_DATE="\"$ASMDATE"\" -I./include/ -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE $file -o $OUT || continue
+		$CC -nostdlib -DASM_BUILD_DATE="\"$ASMDATE"\" -I./include/ -fno-reorder-functions -fno-strict-aliasing -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE $file -o $OUT || continue
 		objcopy -O binary $OUT ./bin/${file%*.c} || continue
 		rm -f ./zip/${file%*.c}.zip
 		zip -9 -j -q "./zip/${file%*.c}-${DATE}.zip" ./bin/${file%*.c} ${file%*.c}-*.txt

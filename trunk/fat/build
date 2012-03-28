@@ -23,8 +23,8 @@ echo "#define _TIME_H $_TIME_H" >>fat_config.h
 echo "#define _TIME_M $_TIME_M" >>fat_config.h
 echo "#define _TIME_S $_TIME_S" >>fat_config.h
 echo "#define GET_FATTIME" >>fat_config.h
-gcc -I../src/include/ -nostdlib -DASM_BUILD_DATE="\"$ASMDATE"\" -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE fat.c ff.c -o fat.o
-gcc -I../src/include/ -DFAT_MINI -DASM_BUILD_DATE="\"$ASMDATE"\" -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE fat.c ff.c -o fatmini.o
+gcc -I../src/include/ -nostdlib -DASM_BUILD_DATE="\"$ASMDATE"\" -fno-reorder-functions -fno-strict-aliasing -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE fat.c ff.c -o fat.o
+gcc -I../src/include/ -DFAT_MINI -DASM_BUILD_DATE="\"$ASMDATE"\" -nostdlib -fno-reorder-functions -fno-strict-aliasing -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables --entry main -Wl,-N $BUILDID -fPIE fat.c ff.c -o fatmini.o
 objcopy -O binary fat.o fat
 objcopy -O binary fatmini.o fatmini
 rm fat*.o

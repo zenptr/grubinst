@@ -233,6 +233,9 @@ typedef enum
 #define free ((void (*)(void *ptr))((*(int **)0x8300)[51]))
 #define realmode_run ((int (*)(long regs_ptr))((*(int **)0x8300)[53]))
 
+#define SKIP_LINE		0x100
+#define SKIP_NONE		0
+#define SKIP_WITH_TERMINATE	0x200
 
 /*
 int
