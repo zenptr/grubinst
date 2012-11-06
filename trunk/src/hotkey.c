@@ -1,6 +1,6 @@
 /*
- *  GRUB Utilities --  Utilities for GRUB Legacy, GRUB2 and GRUB for DOS
- *  Copyright (C) 2007 Bean (bean123ch@gmail.com)
+ *  HOTKEY  --  hotkey functionality for use with grub4dos menu.
+ *  Copyright (C) 2011  chenall(chenall.cn@gmail.com)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,6 +16,17 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+ * compile:
+ *
+ * gcc -Wl,--build-id=none -m32 -mno-sse -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -Wl,-N -fPIE hotkey.c -o hotkey.o
+ *
+ * disassemble:                 objdump -d hotkey.o 
+ * confirm no relocation:       readelf -r hotkey.o
+ * generate executable:         objcopy -O binary hotkey.o hotkey
+ *
+ */
+
 #include "grub4dos.h"
 static int my_app_id = 0;/* this is needed, see the following comment. */
 typedef struct
@@ -29,6 +40,7 @@ typedef struct
 	unsigned short key_code;
 	unsigned short title_num;
 } hotkey_t;
+#define CHECK_F11 0
 #define HOTKEY_MAGIC 0X79654B48
 #define HOTKEY_PROG_MEMORY	0x2000000-0x200000
 #define HOTKEY_FUNC *(int*)0x827C
@@ -144,7 +156,7 @@ static int check_allow_key(unsigned short key);
  * above line occurs.
  */
 asm(".string \"GRUB4DOS\"");
-asm(ASM_BUILD_DATE);
+//asm(ASM_BUILD_DATE);
 /* a valid executable file for grub4dos must end with these 8 bytes */
 asm(".long 0x03051805");
 asm(".long 0xBCBAA7BA");
@@ -172,7 +184,11 @@ static int main(char *arg,int flags)
 			return getkey();
 		}
 		hotkey_flags = *p_hotkey_flags;
+		#if CHECK_F11
 		c = get_key();
+		#else
+		c = getkey();
+		#endif
 		if (!c || check_allow_key(c))
 			return c;
 		for (;hotkey->key_code;++hotkey)
@@ -227,6 +243,7 @@ static int main(char *arg,int flags)
 		buff_len = *(int*)(p-20);
 		if (buff_len > 0x4000)//文件太大加载失败。限制hotkey程序不可以超过16KB。
 			return 0;
+		#if CHECK_F11
 		if (check_f11())//检测BIOS是否支持F11,F12热键，如果有支持直接使用getkey函数取得按键码
 		{
 			_checkkey_ = 1;
@@ -237,6 +254,7 @@ static int main(char *arg,int flags)
 			_checkkey_ = 0;
 			printf("Current BIOS Does not support F11,F12 key,try to hack it.\n");
 		}
+		#endif
 		//HOTKEY程序驻留内存，直接复制自身代码到指定位置。
 		my_app_id = HOTKEY_MAGIC;
 		memmove((void*)HOTKEY_PROG_MEMORY,p,buff_len);
@@ -287,7 +305,7 @@ static void outb(unsigned short port, char val)
 {
 	__asm__ volatile ("outb %%al,%%dx"::"a" (val), "d"(port));
 }
-
+#if CHECK_F11
 /*检查BIOS是否支持F11作为热键*/
 static int check_f11(void)
 {
@@ -337,6 +355,7 @@ static int get_key(void)
 	}
 	return getkey();
 }
+#endif
 
 /*
 	从菜单标题中提取热键代码
