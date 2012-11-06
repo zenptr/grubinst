@@ -58,17 +58,17 @@ endif
 
 $(OBJDIR)/%.o: %.c $(BUILDROOT)/shared.h
 	@mkdir -p $(OBJDIR)
-	gcc -Os -fno-stack-protector -fno-builtin -mpreferred-stack-boundary=2 -fno-strict-aliasing -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef $(DEFINES) -c $*.c -o $(OBJDIR)/$*.o
+	gcc -m32 -mno-sse -g -Os -fno-stack-protector -fno-builtin -mpreferred-stack-boundary=2 -fno-strict-aliasing -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdinc -Wall -Wmissing-prototypes -Wunused -Wshadow -Wpointer-arith -Wundef $(DEFINES) -c $*.c -o $(OBJDIR)/$*.o
 
 $(OBJDIR)/%.o: %.S $(BUILDROOT)/shared.h
 	@mkdir -p $(OBJDIR)
-	gcc $(DEFINES) -c $*.S -o $(OBJDIR)/$*.o
+	gcc -m32 -mno-sse -g $(DEFINES) -c $*.S -o $(OBJDIR)/$*.o
 
 $(OBJDIR)/wee63start: $(OBJDIR)/wee63start.o
 	objcopy -O binary $< $@
 
 $(OBJDIR)/pre_stage2: $(OBJDIR)/asm.o $(OBJDIR)/builtins.o $(OBJDIR)/disk_io.o $(OBJDIR)/fsys_ext2fs.o $(OBJDIR)/fsys_fat.o $(OBJDIR)/fsys_ntfs.o
-	gcc -o $@ -nostdlib -Wl,-N -Wl,-Ttext -Wl,308200 -Wl,-N $(LDFLAGS) $(OBJDIR)/asm.o $(OBJDIR)/builtins.o $(OBJDIR)/disk_io.o $(OBJDIR)/fsys_ext2fs.o $(OBJDIR)/fsys_fat.o $(OBJDIR)/fsys_ntfs.o
+	gcc -m32 -mno-sse -g -o $@ -nostdlib -Wl,-N -Wl,-Ttext -Wl,308200 -Wl,-N $(LDFLAGS) $(OBJDIR)/asm.o $(OBJDIR)/builtins.o $(OBJDIR)/disk_io.o $(OBJDIR)/fsys_ext2fs.o $(OBJDIR)/fsys_fat.o $(OBJDIR)/fsys_ntfs.o
 	objcopy -O binary $@
 	echo -n -e "\0260\002\032\0316" >> $@
 

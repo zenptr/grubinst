@@ -415,7 +415,8 @@ real_codestart:
 hard_stop:
 2:
 	sti
-	hlt
+	/* AMD HLT may cause problems in svm. Comment out. */
+	//hlt
 	jmp	2b
 
 1:
@@ -8506,7 +8507,8 @@ ENTRY(console_getkey)
 
 1:
 	sti		/* getkey needs interrupt on */
-	hlt
+	/* AMD HLT may cause problems in svm. Comment out. */
+	//hlt
 
 	#; work around for Apple BIOS getkey bug
 	#; check the keyboard buffer, until there is a keypress.
@@ -8551,15 +8553,17 @@ ENTRY(console_checkkey)
 
 	.code16
 
-	movl	$500, %ecx
-1:
-	movl	0x46c, %eax	/* get old timer counter */
-
 	sti		/* checkkey needs interrupt on */
-	hlt
+	//movl	$500, %ecx
+	xorl	%ecx, %ecx	/* counter = 4G */
+	movl	0x46c, %eax	/* get old timer counter */
+1:
+	/* AMD HLT may cause problems in svm. Use PAUSE instead. */
+	//hlt
+	pause
 
 	cmpl	0x46c, %eax	/* timer counter changed by int 8? */
-	loopz	1b		/* no change, wait a timer interrupt */
+	addr32 loopz	1b	/* no change, wait a timer interrupt */
 
 	/* counter changed or timed out. */
 

@@ -1,4 +1,6 @@
 
+2012-11-05 (tinybit)Avoid using HLT instructions so that AMD SVM can run ok.
+2012-11-02 (tinybit)fixed a bug in setup_part().
 2011-06-27 (tinybit)In grub4dos.h, added API wee_skip_to, added the 2nd argument of "int" for API print_a_completion.
 2011-06-26 (tinybit)corrected the return data type of grub_read from 32bit to 64bit to match the defination in grub4dos.h. also updated grub4dos.h.
 2011-05-22 (Roy)fix wee127 stage2_size issue. (tinybit)fix find --active issue.

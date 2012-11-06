@@ -358,7 +358,7 @@ command_func (char *arg/*, int flags*/)
 			return !(errnum = ERR_WONT_FIT);
 		  }
 
-		  grub_printf ("   [Linux-%s, setup=0x%x, size=0x%x]\n", (big_linux ? "bzImage" : "zImage"), data_len, text_len);
+		  //grub_printf ("   [Linux-%s, setup=0x%x, size=0x%x]\n", (big_linux ? "bzImage" : "zImage"), data_len, text_len);
 
 		  grub_memmove (linux_data_tmp_addr, (char *)prog_start, data_len + 0x200);
 		  if (lh->header != 0x53726448/* "HdrS" */ || lh->version < 0x0200)
@@ -401,7 +401,7 @@ command_func (char *arg/*, int flags*/)
 		  if ((len = grub_read ((unsigned long long)cur_addr, -1ULL, 0xedde0d90)) != filemax)
 			goto fail;
 
-		  grub_printf ("   [Linux-initrd @ 0x%X, 0x%X bytes]\n", cur_addr, (unsigned long)len);
+		  //grub_printf ("   [Linux-initrd @ 0x%X, 0x%X bytes]\n", cur_addr, (unsigned long)len);
 
 		  /* FIXME: Should check if the kernel supports INITRD.  */
 		  lh->ramdisk_image = cur_addr;
@@ -4078,7 +4078,7 @@ real_root_func (char *arg, int attempt_mnt)
   }
 
   if (*saved_dir)
-	grub_printf ("The current working directory(i.e., the relative path) is %s\n", saved_dir);
+	grub_printf ("%s\n", saved_dir);
 
   /* Clear ERRNUM.  */
   errnum = 0;

@@ -693,10 +693,12 @@ setup_part (char *filename)
     }
   else
     {
-	if (current_drive != saved_drive
-	   || current_partition != saved_partition
-	   || (*filename == '/' && fsys_type == NUM_FSYS)
-	   || buf_drive == -1)
+	/* Always do open_partition to setup the global part_start variable
+	 * properly. Comment out these conditions. -- tinybit 2012-11-02 */
+	//if (current_drive != saved_drive
+	//   || current_partition != saved_partition
+	//   || (*filename == '/' && fsys_type == NUM_FSYS)
+	//   || buf_drive == -1)
 	{
 	    current_drive = saved_drive;
 	    current_partition = saved_partition;

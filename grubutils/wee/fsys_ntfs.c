@@ -543,7 +543,7 @@ static int read_block(read_ctx* ctx, unsigned long long buf, int num, unsigned l
       if (write == 0x900ddeed)
 	{
 #ifndef STAGE1_5
-		grub_printf ("Fatal: Cannot write compressed file.\n");
+		//grub_printf ("Fatal: Cannot write compressed file.\n");
 #endif
 		return 0;
 	}
@@ -677,7 +677,7 @@ static int read_block(read_ctx* ctx, unsigned long long buf, int num, unsigned l
 			if (write == 0x900ddeed)
 			{
 #ifndef STAGE1_5
-				grub_printf ("Fatal: Cannot write NULL blocks.\n");
+				//grub_printf ("Fatal: Cannot write NULL blocks.\n");
 #endif
 				return 0;
 			}
@@ -748,7 +748,7 @@ static int read_data(char* cur_mft,char* pa,unsigned long long dest,unsigned lon
 	if (write == 0x900ddeed)	/* write */
 	{
 #ifndef STAGE1_5
-		grub_printf ("Fatal: Cannot write resident/small file! Enlarge it to 2KB and try again.\n");
+		//grub_printf ("Fatal: Cannot write resident/small file! Enlarge it to 2KB and try again.\n");
 #endif
 		return 0;
 	}
@@ -860,7 +860,7 @@ static int read_data(char* cur_mft,char* pa,unsigned long long dest,unsigned lon
     else if (write == 0x900ddeed)	/* write */
     {
 #ifndef STAGE1_5
-	grub_printf("Fatal: Cannot write compressed or sparse file!\n");
+	//grub_printf("Fatal: Cannot write compressed or sparse file!\n");
 #endif
 	goto fail;
     }
@@ -1410,159 +1410,4 @@ error:
   errnum=ERR_FSYS_CORRUPT;
   return 0;
 }
-
-#ifdef FS_UTIL
-
-void ntfs_info(int level)
-{
-  dbg_printf("blocksize: %u\nspc: %u\nmft_size: %u\nidx_size: %u\nmft_start: 0x%X\n",
-             blocksize,spc,mft_size,idx_size,mft_start);
-}
-
-int ntfs_inode_read(char* buf)
-{
-  if (buf)
-    memcpy(buf,cmft,mft_size<<BLK_SHR);
-  return mft_size<<BLK_SHR;
-}
-
-static char* attr2str(unsigned char attr)
-{
-  switch (attr) {
-  case AT_STANDARD_INFORMATION:
-    return "$STANDARD_INFORMATION";
-  case AT_ATTRIBUTE_LIST:
-    return "$ATTRIBUTE_LIST";
-  case AT_FILENAME:
-    return "$FILENAME";
-  case AT_OBJECT_ID:
-    return "$OBJECT_ID";
-  case AT_SECURITY_DESCRIPTOR:
-    return "$SECURITY_DESCRIPTOR";
-  case AT_VOLUME_NAME:
-    return "$VOLUME_NAME";
-  case AT_VOLUME_INFORMATION:
-    return "$VOLUME_INFORMATION";
-  case AT_DATA:
-    return "$DATA";
-  case AT_INDEX_ROOT:
-    return "$INDEX_ROOT";
-  case AT_INDEX_ALLOCATION:
-    return "$INDEX_ALLOCATION";
-  case AT_BITMAP:
-    return "$BITMAP";
-  case AT_SYMLINK:
-    return "$SYMLINK";
-  case AT_EA_INFORMATION:
-    return "$EA_INFORMATION";
-  case AT_EA:
-    return "$EA";
-  }
-  return "$UNKNOWN";
-}
-
-static void print_name(char* s,int len)
-{
-  int i;
-
-  for (i=0;i<len;i++)
-    putchar(s[i*2]);
-}
-
-void print_runlist(char *run)
-{
-  read_ctx ctx;
-  int first;
-
-  memset(&ctx,0,sizeof(ctx));
-  first=1;
-  while (run=read_run_list(&ctx,run))
-    {
-      if (first)
-        first=0;
-      else
-        putchar(',');
-      if (ctx.flags & RF_BLNK)
-        printf("(+%d)",((ctx.next_vcn-ctx.curr_vcn)*spc));
-      else
-        printf("%d+%d",(ctx.curr_lcn*spc),((ctx.next_vcn-ctx.curr_vcn)*spc));
-      if (*run==0)
-        break;
-    }
-  printf("\n");
-}
-
-void ntfs_inode_info(int level)
-{
-  char *cur_mft,*pos;
-  int first;
-
-  cur_mft=cmft;
-  printf("Type: %s\n",((valueat(cur_mft,0x16,unsigned short) & 2)?"Directory":"File"));
-  if (valueat(cur_mft,0x20,unsigned long))
-    printf("Base: 0x%X\n",(valueat(cur_mft,0x20,unsigned long)));
-  printf("Attr:\n");
-
-  first=1;
-  init_attr(cur_mft);
-  while ((pos=find_attr(cur_mft,0))!=NULL)
-    {
-      unsigned long fg;
-
-      if (get_aflag(AF_ALST))
-        {
-          if (first)
-            {
-              printf("Attr List:\n");
-              first=0;
-            }
-        }
-      printf("  %s (0x%X) ",attr2str(*pos),(unsigned long)(unsigned char)*pos);
-
-      printf((pos[8])?"(nr":"(r");
-
-      fg=valueat(pos,0xC,unsigned short);
-      if (fg & FLAG_COMPRESSED)
-        printf(",c");
-      if (fg & FLAG_ENCRYPTED)
-        printf(",e");
-      if (fg & FLAG_SPARSE)
-        printf(",s");
-
-      if (get_aflag(AF_ALST))
-        {
-          printf(",mft=0x%X",(valueat(ofs2ptr(attr_cur),0x10,unsigned long)));
-          if (pos[8])
-            printf(",vcn=0x%X",(valueat(ofs2ptr(attr_cur),0x8,unsigned long)));
-        }
-
-      if (pos[9])
-        {
-          printf(",nm=");
-          print_name(pos+valueat(pos,0xA,unsigned short),pos[9]);
-        }
-
-      printf(",sz=%d",(valueat(pos,((pos[8])?0x30:0x10),unsigned long)));
-
-      printf(")\n");
-      if ((pos[8]) && (! get_aflag(AF_ALST)))
-        {
-          printf("    ");
-          print_runlist(pos+valueat(pos,0x20,unsigned short));
-        }
-      switch ((unsigned char)pos[0]) {
-      case AT_FILENAME:
-        pos+=valueat(pos,0x14,unsigned short);
-        if (pos[0x40])
-          {
-            printf("    ");
-            print_name(pos+0x42,(unsigned char)pos[0x40]);
-            printf("\n");
-          }
-        break;
-      }
-    }
-}
-
-#endif
 
