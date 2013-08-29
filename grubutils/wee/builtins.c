@@ -437,7 +437,7 @@ done_initrd:
 					if (*(long *)(void *)(p + 0x80) == 0xFFFFFFFF)//boot_drive
 					{
 						*(long *)(void *)(p + 0x80) = saved_drive;
-						*(long *)(void *)(p + 0x08) = saved_partition;
+						*(long *)(void *)(p + 0x08) = (saved_partition | 0xFFFF);
 					}
 					break;
 				}
