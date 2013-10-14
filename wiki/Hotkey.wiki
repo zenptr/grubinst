@@ -17,11 +17,11 @@
       title [*_HOTKEY_*] _菜单标题_
   # 2013-10-14 新增支持热键命令,即可以为某些命令指定一个热键,按下热键时就执行
     * 语法
-      hotkey [hotkey] "COMMAND"
+      hotkey [*_HOTKEY_*] "COMMAND"
       例子:使用了以下命令之后,如果按了F9就会执行reboot
-         hotkey [F9] reboot
+         hotkey [*_F9_*] reboot
       支持同时执行多个命令使用""
-         hotkey [A] "echo Is test ;; pause test"
+         hotkey [*_A_*] "echo Is test ;; pause test"
 
 注：两种热键方式可以根据需要选择使用。
 
