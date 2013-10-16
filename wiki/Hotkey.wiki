@@ -22,7 +22,11 @@
          hotkey [*_F9_*] reboot
       支持同时执行多个命令使用""
          hotkey [*_A_*] "echo Is test ;; pause test"
-
+      可以在命令前置`@`使用隐藏的方式执键不会有任何的屏幕显示.
+         hotkey [*_F2_*] "@kernel /xxxx ;; initred /xxxx ;; boot"
+   * 使用不带命令的hotkey删除或禁用该热键
+     比如: 禁用已注册的F9热键
+         hotkey [*_F9_*]  
 注：两种热键方式可以根据需要选择使用。
 
 =可选参数=
@@ -41,6 +45,14 @@ default 1
 timeout 5
 ##启用热键（如果您有多个菜单，只需要在主菜单启用即可，会自动生效）
 hotkey
+##按F9重启
+hotkey [F9] @reboot
+
+##按F8关机
+hotkey [F8] halt
+
+##按F1启动WINPE
+hotkey [F1] "map --mem /boot/winpe.iso (0xff) && map --hook && chainloader (0xff)"
 
 ##使用按键'A'作为热键。
 title [A] Microsoft Windows Xp
@@ -53,14 +65,6 @@ pause Boot TO WINPE
 ##按'F2'键启动，但不显示前面的F2
 title ^F2 Test for hotkey F2
 pause You have press Hotkey F2
-
-##按'R'键重启
-title [R] Reboot
-reboot
-
-##按'H'键关机
-title [H] Halt
-halt
 
 ##隐藏的菜单项目。
 title ^F5
