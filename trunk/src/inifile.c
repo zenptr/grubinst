@@ -182,7 +182,7 @@ static int inifile(char *section,char *item,char *value)
 						ret = envi_cmd(s1,s2,0);
 					}
 					else
-						ret = printf("%s=%s\n",s1,s2);
+						ret = printf("%s=%s\r\n",s1,s2);
 				}
 				else if (substring(item,s1,1) == 0)
 				{

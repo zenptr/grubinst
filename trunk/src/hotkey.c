@@ -34,17 +34,32 @@ typedef struct
   unsigned short code[4];
   char name[10];
 } key_tab_t;
-
 typedef struct 
 {
 	unsigned short key_code;
 	unsigned short title_num;
 } hotkey_t;
+
+typedef struct
+{
+    int key_code;
+    char *cmd;
+} hotkey_c;
+
+typedef struct
+{
+    int cmd_pos;
+    hotkey_c hk_cmd[64];
+    char cmd[4096];
+} hkey_data_t;
+
 #define CHECK_F11 0
 #define HOTKEY_MAGIC 0X79654B48
 #define HOTKEY_PROG_MEMORY	0x2000000-0x200000
 #define HOTKEY_FUNC *(int*)0x827C
-static key_tab_t key_table[90] = {
+#define BUILTIN_CMDLINE		0x1	/* Run in the command-line.  */
+#define BUILTIN_MENU			(1 << 1)/* Run in the menu.  */
+static key_tab_t key_table[] = {
 //  {{0x011b, 0x011b, 0x011b, 0x0100}, "esc"},
   {{0x0231, 0x0221, 0x0000, 0x7800}, "1"},
   {{0x0332, 0x0340, 0x0300, 0x7900}, "2"},
@@ -155,6 +170,8 @@ static int check_allow_key(unsigned short key);
 /* gcc treat the following as data only if a global initialization like the
  * above line occurs.
  */
+static hkey_data_t hotkey_data = {0,{0,NULL}};//HOTKEY 数据保留区
+static int hotkey_cmd_flag = HOTKEY_MAGIC;//程序尾部标志
 asm(".string \"GRUB4DOS\"");
 //asm(ASM_BUILD_DATE);
 /* a valid executable file for grub4dos must end with these 8 bytes */
@@ -176,12 +193,22 @@ static int main(char *arg,int flags)
 	base_addr = (char *)(init_free_mem_start+512);
 	hotkey = (hotkey_t*)base_addr;
 	p_hotkey_flags = (unsigned long*)(base_addr + 508);
+	if (flags == HOTKEY_MAGIC)
+	{
+	    if (arg && *(int *)arg == 0x54494E49)//INIT 初始数数据
+	    {
+		hotkey_data.hk_cmd[0].cmd = hotkey_data.cmd;
+		hotkey_data.cmd_pos = 0;
+	    }
+	    return (int)&hotkey_data;
+	}
 	if (flags == -1)
 	{
 		int c;
-		if (my_app_id != HOTKEY_MAGIC || !hotkey->key_code)
+		hotkey_c *hkc = hotkey_data.hk_cmd;
+		if (my_app_id != HOTKEY_MAGIC || (!hotkey->key_code && !hkc->key_code))
 		{
-			return getkey();
+		    return getkey();
 		}
 		hotkey_flags = *p_hotkey_flags;
 		#if CHECK_F11
@@ -189,8 +216,42 @@ static int main(char *arg,int flags)
 		#else
 		c = getkey();
 		#endif
+
 		if (!c || check_allow_key(c))
 			return c;
+		for(i=0;i<64;++i)
+		{
+		    if (!hkc[i].key_code)
+			break;
+		    if (hkc[i].key_code == c)
+		    {
+			grub_error_t err_old = errnum;
+			if (hkc[i].cmd[0] == '@')//静默方式运行(没有任何显示)
+			    builtin_cmd(NULL,hkc[i].cmd + 1,BUILTIN_CMDLINE);
+			else
+			{
+			    if ((*(int*)0x8278) >= 20131014)//高版本的GRUB4DOS支持
+			    {
+				putchar_hooked = 0;
+				setcursor (1); /* show cursor and disable splashimage */
+				 if (current_term->SETCOLORSTATE)
+				    current_term->SETCOLORSTATE(COLOR_STATE_STANDARD);
+				cls();
+				if (debug > 0)
+				    printf(" Hotkey Boot: %s\n",hkc[i].cmd);
+			    }
+			    builtin_cmd(NULL,hkc[i].cmd,BUILTIN_CMDLINE);
+			}
+			if (putchar_hooked == 0 && errnum > ERR_NONE && errnum < MAX_ERR_NUM)
+			{
+			    printf("\nError %u\n",errnum);
+			    getkey();
+			}
+			errnum = err_old;
+			return -1;
+		    }
+		}
+
 		for (;hotkey->key_code;++hotkey)
 		{
 			if (hotkey->key_code == c)
@@ -218,7 +279,12 @@ static int main(char *arg,int flags)
 		hotkey->key_code = 0;
 		return 1;
 	}
-	printf("Hotkey for grub4dos by chenall,%s\n",__DATE__);
+	if (debug > 0)
+	    printf("Hotkey for grub4dos by chenall,%s\n",__DATE__);
+	if ((flags & BUILTIN_CMDLINE) && (!arg || !*arg))
+	{
+	    printf("Usage:\n\thotkey -nb\tonly selected menu when press menu hotkey\n\thotkey -nc\tdisable control key\n\thotkey [HOTKEY] \"COMMAND\"\tregister new hotkey\n\te.g.\n\t\t hotkey [F9] \"reboot\"\n\thotkey [HOTKEY]\tDisable Registered hotkey HOTKEY\n");
+	}
 	hotkey_flags = 1<<31;
 	while (*arg == '-')
 	{
@@ -234,7 +300,7 @@ static int main(char *arg,int flags)
 		}
 		arg = wee_skip_to(arg,0);
 	}
-   *p_hotkey_flags = hotkey_flags;
+	*p_hotkey_flags = hotkey_flags;
 	if (!HOTKEY_FUNC)
 	{
 		int buff_len;
@@ -264,7 +330,126 @@ static int main(char *arg,int flags)
 		p = p-*(int*)(p-16);
 		strncat(p," hotkey",-1);
 		builtin_cmd("insmod",p,flags);
-		printf("Hotkey Installed!\n");
+		i = ((int(*)(char*,int))HOTKEY_FUNC)("INIT",HOTKEY_MAGIC);//获取HOTKEY数据位置并作一些初使化
+		if (debug > 0)
+		    printf("Hotkey Installed!\n");
+		if (debug > 1)
+		    printf("hotkey_data_addr: 0x%X\n",i);
+		return 1;
+	}
+
+	if (arg)
+	{
+	    hkey_data_t *hkd = ((hkey_data_t*(*)(char*,int))HOTKEY_FUNC)(NULL,HOTKEY_MAGIC);
+	    hotkey_c *hkc = hkd->hk_cmd;
+
+	    while (*arg && *arg <= ' ')
+		++arg;
+    	    int key_code,cmd_len;
+    	    int exist_key = -1;
+    	    int disabled_key = -1;
+    	    if (*arg != '[')//显示当前已注册热键
+    	    {
+		if (!(flags & BUILTIN_CMDLINE) || debug < 1)//必须在命令行下并且DEBUG 非 OFF 模式才会显示
+		    return 1;
+		if (debug > 1)
+		    printf("hotkey_data_addr: 0x%X\n",hkd);
+		if (hkc->key_code)
+		    printf("Current registered hotkey:\n");
+		while(hkc->key_code)
+		{
+		    if (hkc->key_code != -1)
+		    {
+			if (debug > 1)
+			    printf("0x%X ",hkc->cmd);
+			printf("%s=>%s\n",get_keyname(hkc->key_code),hkc->cmd);
+		    }
+		    ++hkc;
+		}
+		return -1;
+	    }
+	    key_code = check_hotkey(&arg);
+    	    if (!key_code)
+		return 0;
+       	    while(*arg)
+	    {
+		if (*arg++ == ']')
+		    break;
+	    }
+	    while (*arg && *arg <= ' ')
+		++arg;
+
+	    if (*arg == '"')
+	    {
+		cmd_len = strlen(arg);
+		++arg;
+		--cmd_len;
+		while(cmd_len--)
+		{
+		    if (arg[cmd_len] == '"')
+		    {
+    			arg[cmd_len] = 0;
+			break;
+		    }
+		}
+	    }
+	    cmd_len = strlen(arg) + 1;
+	    for(i=0;i<64;++i)
+	    {
+		if (!hkc[i].key_code)
+		    break;
+		if (hkc[i].key_code == key_code)
+		    exist_key = i;
+		else if (hkc[i].key_code == -1)
+		    disabled_key = i;
+	    }
+
+	    if (disabled_key != -1 && exist_key == -1)
+	    {//有禁用的热键,直接使用该位置
+		exist_key = disabled_key;
+		hkc[exist_key].key_code = key_code;
+	    }
+
+	    if (i==64 && exist_key == -1)
+	    {
+		printf("Max 64 hotkey cmds limit!");
+		return 0;
+	    }
+
+	    if (exist_key != -1)//已经存在
+	    {
+		if (strlen(hkc[exist_key].cmd) >= cmd_len)//新的命令长度没有超过旧命令长度
+		   i = -1;
+	    }
+	    else//新增热键
+	    {
+    		exist_key = i;
+		hkc[i].key_code = key_code;
+	    }
+	    
+	    if (cmd_len <= 1)//禁用热键
+	    {
+		hkc[exist_key].key_code = -1;
+		return 1;
+	    }
+
+	    if (hkd->cmd_pos + cmd_len >= sizeof(hkd->cmd))
+	    {
+		printf("error: not enough space!\n");
+		return 0;
+	    }
+	    
+	    if (i >= 0)//需要更新地址
+	    {
+	        hkc[exist_key].cmd = hkd->cmd + hkd->cmd_pos;
+	        hkd->cmd_pos += cmd_len;//命令数据区
+	    }
+
+	    memmove(hkc[exist_key].cmd,arg,cmd_len );
+
+	    if (debug > 0)
+		printf("%d [%s] registered!\n",exist_key,get_keyname(key_code));
+	    return 1;
 	}
 	return 0;
 }
