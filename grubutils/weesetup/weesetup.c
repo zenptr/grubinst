@@ -43,9 +43,11 @@
 #define FLAG_LISTDEVS    (1<<7)
 
 #define SECTOR_SIZE      (0x200)
+#define SECTOR_BIT      9
+#define WEE_SECTORS	63
 #define PARTTABLE_SIZE   (0x48)
 #define WEE_SIGN         (0xCE1A02B0)
-
+#define MAX_WEE_SIZE	(WEE_SECTORS<<SECTOR_BIT)
 typedef unsigned char uchar;
 typedef unsigned short uchar2;
 typedef unsigned long uchar4;
@@ -577,7 +579,8 @@ int main( int argc, char *argv[] )
    char *device_name       = 0; // name of the device to install to
    char *saveold_filename  = 0;
 
-   int  data_size          = 0; // size of each of these buffers
+   int  data_size          = MAX_WEE_SIZE; // size of each of these buffers
+   unsigned data_sectors  = 0;
    char *read_data         = 0; // buffer for data read from hd
    char *write_data        = 0; // buffer for data created for writing to hd
    char *reread_data       = 0; // buffer for verification of written data
@@ -593,6 +596,7 @@ int main( int argc, char *argv[] )
    char *script_data       = 0;
 
    int  install_flag	   = 0;
+   unsigned short verbose = 0;
    
    struct option long_options[] = {
    {"backupmbr",  0, 0, 'b'},
@@ -656,7 +660,7 @@ int main( int argc, char *argv[] )
          install_flag |= FLAG_SHOWSCRIPT;
          break;
       case 'v':
-         install_flag |= FLAG_VERBOSE;
+         verbose = 1;
          break;
       case 'w':
          wee_filename = optarg;
@@ -678,6 +682,11 @@ int main( int argc, char *argv[] )
       return 1;
    }
 
+    if (!device_name)
+    {
+	if (argv[argc-1][0] == '(')
+	    device_name = argv[argc-1];
+    }
    if( install_flag & FLAG_SHOWSCRIPT )
    {
       if( device_name && wee_filename )
@@ -702,17 +711,6 @@ int main( int argc, char *argv[] )
       return 0;
    }
 
-   if( !device_name )
-   {
-      fprintf( stderr, "you must specify a device name using the --device= option\n" );
-      return 1;
-   }
-
-   if( install_flag & FLAG_RESTOREMBR )
-   {
-      return restore_mbr( device_name, install_flag );
-   }
-
    if( script_filename && grldr_filename )
    {
       fprintf( stderr, "you can't use script and grldr at the same time\n" );
@@ -723,13 +721,15 @@ int main( int argc, char *argv[] )
    {
       wee_size = read_file( wee_filename, 0, 0 );
    }
+
    if( grldr_filename )
    {
       grldr_size   = read_file( grldr_filename, 0, 0 );
       grldr_offset = round2blocks( wee_size );
+      data_size += round2blocks( grldr_size );
    }
-   data_size = round2blocks( wee_size ) + round2blocks( grldr_size );
-   
+
+   data_sectors = bytes2blocks( data_size );
    read_data   = (char*)malloc( data_size );
    write_data  = (char*)malloc( data_size );
    reread_data = (char*)malloc( data_size );
@@ -741,16 +741,16 @@ int main( int argc, char *argv[] )
    memset( read_data,   0, data_size );
    memset( write_data,  0, data_size );
    memset( reread_data, 0, data_size );
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
       printf( "need %d bytes (%d sectors) for installation\n",
-              data_size, bytes2blocks( data_size ) );
+              data_size, data_sectors );
    }
 
    /* step 2: read replacement data */
    if( wee_filename )
    {
-      if( install_flag & FLAG_VERBOSE )
+      if(verbose)
       {
          printf( "reading wee from \"%s\" (%d bytes)\n", wee_filename, wee_size );
       }
@@ -762,7 +762,7 @@ int main( int argc, char *argv[] )
    }
    else
    {
-      if( install_flag & FLAG_VERBOSE )
+      if(verbose)
       {
          printf( "using internal wee (%d bytes)\n", wee_size );
       }
@@ -779,9 +779,10 @@ int main( int argc, char *argv[] )
 
    i += 0x10;	//wee63 script offset;
    script_data = write_data + i;
+
    if( script_filename )
    {
-      int max_script_size = (round2blocks( wee_size ) - i);
+      int max_script_size = (MAX_WEE_SIZE - i);
       int script_size = read_file( script_filename, 0, 0 );
       if( script_size >= max_script_size )
       {
@@ -789,20 +790,22 @@ int main( int argc, char *argv[] )
                   script_filename, script_size, max_script_size );
          goto quit;
       }
-      if( install_flag & FLAG_VERBOSE )
+      if(verbose)
       {
          printf( "reading script from \"%s\" (%d bytes)\n", script_filename, script_size );
       }
       read_file( script_filename, script_data, script_size );
+      //terminate 
+      memset(script_data + script_size,0,MAX_WEE_SIZE - i - script_size);
    }
 
    if( grldr_filename )
    {
-      if( install_flag & FLAG_VERBOSE )
+      if(verbose)
       {
          printf( "reading grldr from \"%s\" (%d bytes)\n", grldr_filename, grldr_size );
       }
-      memset( script_data, 0, round2blocks( wee_size ) - i );
+
       if( read_file( grldr_filename, write_data + grldr_offset, grldr_size ) != grldr_size )
       {
          fprintf( stderr, "error reading grldr \"%s\"\n", grldr_filename );
@@ -810,31 +813,53 @@ int main( int argc, char *argv[] )
       }
       sprintf( script_data, "(hd0)%d+%d",
                bytes2blocks( grldr_offset ), bytes2blocks( grldr_size ) );
-      if( install_flag & FLAG_VERBOSE )
+       if(verbose)
       {
          printf( "wee script for loading grldr: \"%s\"\n", script_data );
       }
    }
+   
+   if( !device_name )
+   {
+	if( saveold_filename )
+	{
+	    if(verbose)
+	    {
+		printf( "saving data to \"%s\"\n", saveold_filename );
+	    }
+
+	    write_file( saveold_filename, write_data, MAX_WEE_SIZE );
+	    goto quit;
+	}
+
+      fprintf( stderr, "you must specify a device name using the --device= option\n" );
+      return 1;
+   }
+
+   if( install_flag & FLAG_RESTOREMBR )
+   {
+      return restore_mbr( device_name, install_flag );
+   }
 
    /* step 3: read data from device */
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
       printf( "reading current data from \"%s\"", device_name );
    }
    open_dev( &dev, device_name );
-   for( i = 0; i < (data_size / SECTOR_SIZE); ++i )
+   for( i = 0; i < data_sectors; ++i )
    {
-      char *p = read_data + (SECTOR_SIZE * i);
+      char *p = read_data + (i<<SECTOR_BIT);
       seek_dev( &dev, i );
       read_dev( &dev, p, 1 );
-      if( install_flag & FLAG_VERBOSE )
+       if(verbose)
       {
          putchar( '.' );
          fflush( stdout );
       }
    }
    close_dev( &dev );
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
       putchar( '\n' );
       fflush( stdout );
@@ -871,7 +896,7 @@ int main( int argc, char *argv[] )
 
    if( install_flag & FLAG_BACKUPMBR )
    {
-      if( install_flag & FLAG_VERBOSE )
+       if(verbose)
       {
          printf( "copying original boot sector to second sector\n" );
       }
@@ -891,7 +916,7 @@ int main( int argc, char *argv[] )
    /* step 5: save read data */
    if( saveold_filename )
    {
-      if( install_flag & FLAG_VERBOSE )
+       if(verbose)
       {
          printf( "saving read data to \"%s\"\n", saveold_filename );
       }
@@ -899,46 +924,53 @@ int main( int argc, char *argv[] )
       write_file( saveold_filename, read_data, data_size );
    }
 
+    write_file( "backup.mbr",   read_data,   data_size );
    /* step 6: write new data and reread */
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
       printf( "writing new data to \"%s\"", device_name );
    }
    open_dev( &dev, device_name );
-   for( i = 0; i < (data_size / SECTOR_SIZE); ++i )
+   char *p;
+   int j = 0;
+   for(p =write_data,i = 0; i < data_sectors; ++i )
    {
-      char *p = write_data + (SECTOR_SIZE * i);
-      seek_dev( &dev, i );
-      write_dev( &dev, p, 1 );
-      if( install_flag & FLAG_VERBOSE )
+      if (memcmp(p,read_data + (i<<SECTOR_BIT),SECTOR_SIZE))
       {
-         putchar( '.' );
-         fflush( stdout );
+	seek_dev( &dev, i );
+	write_dev( &dev, p, 1 );
+	if(verbose)
+	{
+	    putchar( '.' );
+	    fflush( stdout );
+	}
+	++j;
       }
+      p += SECTOR_SIZE;
    }
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
-      putchar( '\n' );
+      printf("\n%d sectors changed.\n",j);
       fflush( stdout );
    }
 
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
       printf( "rereading written data for verification from \"%s\"", device_name );
    }
-   for( i = 0; i < (data_size / SECTOR_SIZE); ++i )
+   for( i = 0; i < data_sectors; ++i )
    {
-      char *p = reread_data + (SECTOR_SIZE * i);
+      char *p = reread_data + (i<<SECTOR_BIT);
       seek_dev( &dev, i );
       read_dev( &dev, p, 1 );
-      if( install_flag & FLAG_VERBOSE )
+       if(verbose)
       {
          putchar( '.' );
          fflush( stdout );
       }
    }
    close_dev( &dev );
-   if( install_flag & FLAG_VERBOSE )
+    if(verbose)
    {
       putchar( '\n' );
       fflush( stdout );
@@ -946,7 +978,7 @@ int main( int argc, char *argv[] )
 
    if( install_flag & FLAG_DEBUG )
    {
-      if( install_flag & FLAG_VERBOSE )
+       if(verbose)
       {
          printf( "creating dump files for debug purposes\n" );
       }
@@ -961,16 +993,16 @@ int main( int argc, char *argv[] )
       fprintf( stderr, "writing new data failed\ntrying to rewrite original data... " );
       fflush( stderr );
       open_dev( &dev, device_name );
-      for( i = 0; i < (data_size / SECTOR_SIZE); ++i )
+      for( i = 0; i < data_sectors; ++i )
       {
-         char *p = read_data + (SECTOR_SIZE * i);
+         char *p = read_data + (i<<SECTOR_BIT);
          seek_dev( &dev, i );
          write_dev( &dev, p, 1 );
       }
 
-      for( i = 0; i < (data_size / SECTOR_SIZE); ++i )
+      for( i = 0; i < data_sectors; ++i )
       {
-         char *p = reread_data + (SECTOR_SIZE * i);
+         char *p = reread_data + (i<<SECTOR_BIT);
          seek_dev( &dev, i );
          read_dev( &dev, p, 1 );
       }
