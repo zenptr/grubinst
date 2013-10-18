@@ -333,9 +333,6 @@ static int main(char *arg,int flags)
 		i = ((int(*)(char*,int))HOTKEY_FUNC)("INIT",HOTKEY_MAGIC);//获取HOTKEY数据位置并作一些初使化
 		if (debug > 0)
 		    printf("Hotkey Installed!\n");
-		if (debug > 1)
-		    printf("hotkey_data_addr: 0x%X\n",i);
-		return 1;
 	}
 
 	if (arg)
