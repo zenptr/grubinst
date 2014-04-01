@@ -417,7 +417,7 @@ int chkpci_func(char *arg,int flags)
 #endif
 	char sc[6] = "\xff\xff\xff\xff\xff";
 	char cc[6] = "\xff\xff\xff\xff\xff";
-	char skip[6] = "w";
+	char skip[6] = "\0";
 	struct pci_dev *devs = PCI;
 	int i,db_type=0;
 	int sort = 0;
@@ -482,7 +482,7 @@ int chkpci_func(char *arg,int flags)
 		else if (memcmp(arg,"-w:",3) == 0 )
 		{
                     arg += 3;
-                    for (i=1;i<5;++i)
+                    for (i=0;i<5;++i)
                     {
                       if (*arg && *arg != ' ')
                         skip[i] = tolower(*arg++);
@@ -794,7 +794,7 @@ int DriverPack(char *skip)
 				int len = 1;
 				if (hwids = find_pci(hwids, &len))
 				{
-                                        if (skip[1])
+                                        if (skip[0])
                                         {
                                            skip_s = get_ms_cfg("exc_skipIfOS",count);
                                            if (skip_s)
