@@ -32,6 +32,8 @@ gcc -nostdlib -fno-zero-initialized-in-bss -fno-function-cse -fno-jump-tables -W
  * to get this source code & binary: http://grub4dos-chenall.google.com
  * For more information.Please visit web-site at http://chenall.net
  更新信息(changelog):
+        2014-04-01
+                1.使用drivepack.ini格式时支持指定-w参数,比如-w:xp,会匹配适用于winxp的驱动
 	2010-11-03
 		1.-cc,-sc参数支持列表
 		例子：　chkpci -cc:1 -sc:0,4
@@ -203,6 +205,7 @@ return printf("\n CHKPCI For GRUB4DOS,Compiled time: %s %s\n\
 \n -sc:SC  scan SubClass Codes.\n\
 \n -srs    for SATA/SCSI/RAID.\n\
 \n FILE    PCI device database file.\n\
+\n -w:[xp|2k|2k3] only find driver for specified OS,use for driverpack.\n\
 \n For more information.Please visit web-site at http://chenall.net/tag/grub4dos\n\
  to get this source and bin: http://grubutils.googlecode.com\n",__DATE__,__TIME__);
 }
@@ -414,6 +417,7 @@ int chkpci_func(char *arg,int flags)
 #endif
 	char sc[6] = "\xff\xff\xff\xff\xff";
 	char cc[6] = "\xff\xff\xff\xff\xff";
+	char skip[6] = "w";
 	struct pci_dev *devs = PCI;
 	int i,db_type=0;
 	int sort = 0;
@@ -474,6 +478,16 @@ int chkpci_func(char *arg,int flags)
 		else if (memcmp(arg,"-u",2) == 0)
 		{
 			sort = 1;
+		}
+		else if (memcmp(arg,"-w:",3) == 0 )
+		{
+                    arg += 3;
+                    for (i=1;i<5;++i)
+                    {
+                      if (*arg && *arg != ' ')
+                        skip[i] = tolower(*arg++);
+                    }
+                    skip[i] = 0;
 		}
 		else
 			break;
@@ -594,13 +608,13 @@ int chkpci_func(char *arg,int flags)
 		devs->venID = 0;
 	}
 
-	int DriverPack(void);
+	int DriverPack(char *skip);
 	switch (db_type)
 	{
 		case 2:
 			return chkpci();
 		case 3:
-			return DriverPack();
+			return DriverPack(skip);
 		default:
 			for(devs = PCI;devs->venID;++devs)
 			{
@@ -711,6 +725,10 @@ char *get_cfg(char *string)
 	while (f = f_pos)
 	{
 		f_pos = skip_to(0x100,f_pos);
+		if (*(short*)string == 0x736d && strncmpi(string,f,4) < 0)
+		{
+                  return NULL;
+                }
 		if (substring(string,f,1) == -1)
 		{
 			f += strlen(string);
@@ -738,9 +756,10 @@ char *get_ms_cfg(char *string,unsigned int count)
 /*
 	分析DRIVEPACK文件,根据匹配的PCI记录设置参数输出.
 */
-int DriverPack(void)
+int DriverPack(char *skip)
 {
-	char *rootdir,*devdir,*deviceName,*tag,*hwids,*sysFile,*p;
+	char *rootdir,*devdir,*deviceName,*tag,*hwids,*sysFile,*p,*skip_s;
+	int skip_len = strlen(skip);
 	ms_name = f_pos = FILE_BUF;
 	if (!find_section("[DriverPack]"))
 		return 0;
@@ -775,6 +794,21 @@ int DriverPack(void)
 				int len = 1;
 				if (hwids = find_pci(hwids, &len))
 				{
+                                        if (skip[1])
+                                        {
+                                           skip_s = get_ms_cfg("exc_skipIfOS",count);
+                                           if (skip_s)
+                                           {
+                                              int j;
+                                              for(j=0;skip_s[j];++j) skip_s[j] = tolower(skip_s[j]);
+                                              char *p = strstr(skip_s,skip);
+                                              if (p && p[skip_len] <= ',')
+                                              {
+                                                ++count;
+                                                continue;
+                                              }
+                                           }
+                                        }
 					putchar('\"');
 					while(hwids)
 					{
