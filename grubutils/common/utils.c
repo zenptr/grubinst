@@ -628,7 +628,7 @@ chk_mbr (unsigned char *buf)
 int
 chk_mbr2 (char *buf)
 {
-  unsigned long pt[4][2];
+  unsigned long long pt[4][2];
   int i, pn, bp;
 
   pn = bp = 0;
